@@ -24,13 +24,20 @@ struct Token {
 // 現在見ているtoken
 Token* token;
 
-// エラーをstderrに出すためのutil 関数
-void error(char *fmt, ...) {
-    // TODO: なにこれ
+char* user_input;
+void error_at(char* loc, char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
+
+    // 今読んでいるaddress - user_inputの先頭のaddress = pos
+    int pos = loc - user_input;
+
+    fprintf(stderr, "%s\n", user_input);
+    fprintf(stderr, "%*s", pos, " "); // pos個分の空白を出力(入力が1行であることを想定)
+    fprintf(stderr, "^ ");
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\n");
+
     exit(1);
 }
 
@@ -48,7 +55,7 @@ bool consume(char op) {
 // それ以外にはエラーを投げる
 void expect(char op) {
     if (token->kind != TK_RESERVED || token->str[0] != op) {
-        error("'%c'ではありません", op);
+        error_at(token->str, "'%c'ではありません", op);
     }
     token = token->next;
 }
@@ -57,7 +64,7 @@ void expect(char op) {
 // それ以外の場合にはエラー
 int expect_number() {
     if (token->kind != TK_NUM) {
-        error("数ではありませんん");
+        error_at(token->str, "数ではありませんん");
     }
     int val = token->val;
     token = token->next;
@@ -82,7 +89,8 @@ Token *new_token(TokenKind kind, Token *cur, char *str) {
 
 // 入力文字列pをトークない頭してそれを返す
 // headはコードを簡単にするためのtrick. ポインターでlinkedlistを作るときの定石らしい.
-Token* tokenize(char *p) {
+Token* tokenize() {
+    char *p = user_input;
     Token head;
     head.next = NULL;
     Token *cur = &head;
@@ -106,12 +114,14 @@ Token* tokenize(char *p) {
             continue;
         }
 
-        error("トークナイズできません");
+        error_at(token->str, "トークナイズできません");
     }
 
     new_token(TK_EOF, cur, p);
     return head.next;
 }
+
+
 
 int main(int argc, char **argv) {
     if (argc != 2) {
@@ -119,6 +129,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    user_input = argv[1];
     token = tokenize(argv[1]);
 
     // アセンブリの前半を出力

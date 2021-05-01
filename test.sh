@@ -58,4 +58,14 @@ bar = 2 + 3;
 foo + bar;
 "
 
+assert 6 "
+foo = 1;
+bar = 2 + 3;
+return foo + bar;
+"
+
+assert 14 "a = 3;
+b = 5 * 6 - 8;
+return a + b / 2;"
+
 echo OK

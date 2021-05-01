@@ -34,9 +34,15 @@ void program() {
     code[i] = NULL;
 }
 
-// stmt = expr ";"
+// stmt = expr ";" | "return" expr ";"
 Node* stmt() {
-    Node* node = expr();
+    if(consume("return")) {
+        node = new_node(ND_RETURN);
+        node->lhs = expr(); // lhsだけ持つとする
+    } else {
+        node = expr()
+    }
+
     expect(";");
     return node;
 }
@@ -205,6 +211,13 @@ void gen(Node* node) {
         // rdiの値 = 計算結果をstackの頂点に入れておく
         // こうすることで a = b = 10 みたいな式がかける
         printf("  push rdi\n");
+        return;
+    case ND_RETURN:
+        gen(node->lhs);
+        // printf("  pop rax\n");
+        // printf("  mov rsp, rbp\n");
+        // printf("  pop rbp\n");
+        printf("  ret\n");
         return;
     }
 

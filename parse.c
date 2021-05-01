@@ -116,8 +116,11 @@ LVar* find_lvar(Token *tok) {
     return NULL;
 }
 
-bool is_letter(char* p) {
-    return ('a' <= *p && *p <= 'z') || *p == '_';
+bool is_alnum(char* p) {
+    return ('a' <= *p && *p <= 'z') ||
+           ('A' <= *p && *p <= 'Z') ||
+           ('0' <= *p && *p <= '9') ||
+           (*p == '_');
 }
 
 // 入力文字列pをトークない頭してそれを返す
@@ -138,6 +141,15 @@ Token* tokenize() {
             continue;
         }
 
+        // identの前に処理する
+        // returnがきてなおかつnの次がtokenを構成する文字列ではない
+        // p[6]: pの示すアドレス+6にある値
+        if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
+            cur = new_token(TK_RETURN, cur, p, 6);
+            p += 6;
+            continue;
+        }
+
         if (startswith(p, "==") || startswith(p, "!=") || startswith(p, "<=") || startswith(p, ">=")) {
             cur = new_token(TK_RESERVED, cur, p, 2);
             p += 2;
@@ -153,7 +165,7 @@ Token* tokenize() {
         // alphabet+いくつかの記号からなる文字列のまとまりは変数名
         if('a' <= *p && *p <= 'z') {
             char* start = p;
-            while(is_letter(p)) {
+            while(is_alnum(p)) {
                 p++;
             }
             cur = new_token(TK_IDENT, cur, start, (p-start));

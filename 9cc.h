@@ -11,7 +11,8 @@
 typedef enum {
     TK_RESERVED, // 記号
     TK_NUM,      // 整数トークン
-    TK_EOF       // 入力の終わりを表すトークン
+    TK_EOF,      // 入力の終わりを表すトークン
+    TK_IDENT     // 識別子
 } TokenKind;
 
 typedef struct Token Token;
@@ -23,7 +24,19 @@ struct Token {
     int len;        // トークンの長さ(lenを追加するまでは1文字の前提だった)
 };
 
+// ローカル変数のリスト(linkedlist)
+typedef struct LVar LVar;
+struct LVar {
+    LVar *next;
+    char *name;
+    int len; // 名前の長さ
+    int offset;
+};
+
+LVar* find_lvar(Token *tok);
+
 bool consume(char* op);
+Token* consume_ident();
 void expect(char* op);
 int expect_number();
 bool at_eof();
@@ -43,7 +56,9 @@ typedef enum {
     ND_EQ,
     ND_NE,
     ND_LT,
-    ND_LE
+    ND_LE,
+    ND_ASSIGN,
+    ND_LVAR    // ローカル変数
 } NodeKind;
 
 typedef struct Node Node;
@@ -53,12 +68,19 @@ struct Node {
     Node *lhs;
     Node *rhs;
     int val;   // kind == ND_NUMの場合のみ使う
+    int offset; // ND_LVARの場合のみ使う
 };
 
 Node* new_node(NodeKind kind);
 
 Node* new_binary(NodeKind kind, Node* lhs, Node* rhs);
 Node* new_num(int val);
+
+// LinkedList<Token>から Nodeを構築する
+void program();
+Node* stmt();
+Node* expr();
+Node* assign();
 Node* expr();
 Node* equality();
 Node* relational();
@@ -66,14 +88,19 @@ Node* add();
 Node* mul();
 Node* unary();
 Node* primary();
+
+
 // 構文木からアセンブラを作るところまで一気に進める
 void gen(Node* node);
-
+void gen_lval(Node* node);
 
 // util
 void print_token(Token* token);
 void error_at(char* loc, char* fmt, ...) ;
+void error(char* fmt, ...);
 
 // global variables
 extern Token* token;
 extern char* user_input;
+extern Node *code[100];
+extern LVar* locals;

@@ -8,3 +8,11 @@ cc -o test1 test1.c
 assembler -> mld
 cc -o test2 test2.s
 アセンブラの拡張子はs
+
+### debug
+```bash
+$ export SEGFAULT_SIGNALS="all"
+# g optionをコンパイラにつけておく
+$ make test
+$ gdb 9cc core
+```

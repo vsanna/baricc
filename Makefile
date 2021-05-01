@@ -3,8 +3,6 @@ SRCS=$(wildcard *.c)
 OBJS=$(SRCS:.c=.o)
 
 9cc: $(OBJS)
-	echo $(SRCS)
-	echo $(OBJS)
 	$(CC) -o 9cc $(OBJS) $(LDFLAGS)
 
 $(OBJS): 9cc.h

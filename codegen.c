@@ -1,4 +1,5 @@
 #include "9cc.h"
+LVar* locals;
 
 Node* new_node(NodeKind kind) {
     Node* node = calloc(1, sizeof(Node));
@@ -20,17 +21,40 @@ Node* new_num(int val) {
     return node;
 }
 
-Node* expr();
-Node* equality();
-Node* relational();
-Node* add();
-Node* mul();
-Node* unary();
-Node* primary();
+// 最大stmt数(仮)
+Node *code[100];
 
-// expr = equality
+// program = stmt*
+void program() {
+    int i = 0;
+    while (!at_eof()) {
+        code[i] = stmt();
+        i++;
+    }
+    code[i] = NULL;
+}
+
+// stmt = expr ";"
+Node* stmt() {
+    Node* node = expr();
+    expect(";");
+    return node;
+}
+
+// expr = assign
 Node* expr() {
-    return equality();
+    return assign();
+}
+
+// assign = equality ("=" equality)?
+Node* assign() {
+    Node* node = equality();
+
+    if (consume("=")) {
+        node = new_binary(ND_ASSIGN, node, equality());
+    }
+
+    return node;
 }
 
 // equality = relational ("==" relational | "!=" relational)*
@@ -54,6 +78,7 @@ Node* relational() {
 
     for(;;) {
         // TODO: こっち先でよいの?
+        // -> OK. なぜならconsumeが見ているのは次のtokenなのですでに<か<=かは考慮済みなので
         if (consume("<")) {
             node = new_binary(ND_LT, node, add());
         } else if (consume("<=")) {
@@ -109,11 +134,39 @@ Node* unary() {
     return primary();
 }
 
+// primary = num | ident | "(" expr ")"
 Node* primary() {
     // 次のトークンが ( なら ( expr ) のハズ
     if (consume("(")) {
         Node* node = expr();
         expect(")");
+        return node;
+    }
+
+    // ident
+    Token* tok = consume_ident();
+    if (tok) {
+        Node* node = new_node(ND_LVAR);
+        LVar* lvar = find_lvar(tok);
+        // すでに宣言済みの変数であればそのoffsetを使う
+        if(lvar) {
+            node->offset = lvar->offset;
+        // 新規変数であればlvarを追加する
+        } else {
+            lvar = calloc(1, sizeof(LVar));
+            lvar->next = locals;
+            lvar->name = tok->str;
+            lvar->len = tok->len;
+
+            if (locals == NULL) {
+                lvar->offset = 8;
+            } else {
+                lvar->offset = locals->offset + 8;
+            }
+
+            node->offset = lvar->offset;
+            locals = lvar;
+        }
         return node;
     }
 
@@ -124,8 +177,34 @@ Node* primary() {
 
 // 構文木からアセンブラを作るところまで一気に進める
 void gen(Node* node) {
-    if (node->kind == ND_NUM) {
+    switch(node->kind) {
+    case ND_NUM:
         printf("  push %d\n", node->val);
+        return;
+    case ND_LVAR:
+        // 左辺値のアドレスをスタックの先頭にpushし、
+        gen_lval(node);
+        // そのアドレスをraxにいれ
+        printf("  pop rax\n");
+        // そのアドレスにある値をraxにいれ、
+        printf("  mov rax, [rax]\n");
+        // その値をスタックの先頭にpush
+        printf("  push rax\n");
+        return;
+    case ND_ASSIGN:
+        // 左辺の左辺値のアドレスをstackにpush
+        gen_lval(node->lhs);
+        // 右辺を計算した値をstackにpush
+        gen(node->rhs);
+        // rdiに計算結果をpopしてrdiにいれる
+        printf("  pop rdi\n");
+        // 左辺のアドレスをpopしてraxに入れる
+        printf("  pop rax\n");
+        // raxのアドレスの指す場所にrdiを入れる
+        printf("  mov [rax], rdi\n");
+        // rdiの値 = 計算結果をstackの頂点に入れておく
+        // こうすることで a = b = 10 みたいな式がかける
+        printf("  push rdi\n");
         return;
     }
 
@@ -183,5 +262,16 @@ void gen(Node* node) {
             break;
     }
 
+    printf("  push rax\n");
+}
+
+// nodeが左辺値ならその変数に入っている値をstackにpushする
+void gen_lval(Node* node) {
+    if (node->kind != ND_LVAR) {
+        error("代入の左辺値が変数ではありません");
+    }
+
+    printf("  mov rax, rbp\n");
+    printf("  sub rax, %d\n", node->offset);
     printf("  push rax\n");
 }

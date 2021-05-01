@@ -2,6 +2,7 @@
 
 Token* token;
 char* user_input;
+LVar* locals;
 
 // util
 void print_token(Token* token) {
@@ -10,6 +11,14 @@ void print_token(Token* token) {
         fprintf(stderr, "%c", *(token->str + i));
     }
     fprintf(stderr, "\n");
+}
+
+void error(char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    exit(1);
 }
 
 void error_at(char* loc, char* fmt, ...) {
@@ -39,6 +48,18 @@ bool consume(char* op) {
     }
     token = token->next;
     return true;
+}
+
+// TODO: これほんと?
+// 次のトークンがidentであれば一つ読み進めてそのtokenを返す
+// それ以外はNULL
+Token* consume_ident() {
+    if(token->kind != TK_IDENT) {
+        return NULL;
+    }
+    Token* tok = token;
+    token = token->next;
+    return tok;
 }
 
 // 次のトークンが期待している記号のときにはトークンを一つ読み進める。
@@ -84,6 +105,21 @@ bool startswith(char* p, char* q) {
     return memcmp(p, q, strlen(q)) == 0;
 }
 
+// local変数を探してあればそれを返す。なければNULLを返す
+LVar* find_lvar(Token *tok) {
+    for (LVar* var = locals; var; var = var->next) {
+        // NOTE: memcmpは一致していたら0を返す
+        if (var->len == tok->len && !memcmp(tok->str, var->name, var->len)) {
+            return var;
+        }
+    }
+    return NULL;
+}
+
+bool is_letter(char* p) {
+    return ('a' <= *p && *p <= 'z') || *p == '_';
+}
+
 // 入力文字列pをトークない頭してそれを返す
 // headはコードを簡単にするためのtrick. ポインターでlinkedlistを作るときの定石らしい.
 Token* tokenize() {
@@ -96,8 +132,6 @@ Token* tokenize() {
 
     while(*p) {
         // print_token(cur);
-        // char* curtokenstr = cur->str == NULL ? "-" : cur->str;
-        // fprintf(stderr, "token: %s\n", curtokenstr);
 
         if (isspace(*p)) {
             p++;
@@ -110,9 +144,19 @@ Token* tokenize() {
             continue;
         }
 
-        if (strchr("+-*/()<>", *p)) {
+        if (strchr("+-*/()<>;=", *p)) {
             cur = new_token(TK_RESERVED, cur, p, 1);
             p++;
+            continue;
+        }
+
+        // alphabet+いくつかの記号からなる文字列のまとまりは変数名
+        if('a' <= *p && *p <= 'z') {
+            char* start = p;
+            while(is_letter(p)) {
+                p++;
+            }
+            cur = new_token(TK_IDENT, cur, start, (p-start));
             continue;
         }
 

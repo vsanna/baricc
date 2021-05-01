@@ -36,11 +36,13 @@ void program() {
 
 // stmt = expr ";" | "return" expr ";"
 Node* stmt() {
-    if(consume("return")) {
+    Node* node;
+
+    if(consume_return()) {
         node = new_node(ND_RETURN);
         node->lhs = expr(); // lhsだけ持つとする
     } else {
-        node = expr()
+        node = expr();
     }
 
     expect(";");
@@ -214,9 +216,9 @@ void gen(Node* node) {
         return;
     case ND_RETURN:
         gen(node->lhs);
-        // printf("  pop rax\n");
-        // printf("  mov rsp, rbp\n");
-        // printf("  pop rbp\n");
+        printf("  pop rax\n");
+        printf("  mov rsp, rbp\n");
+        printf("  pop rbp\n");
         printf("  ret\n");
         return;
     }

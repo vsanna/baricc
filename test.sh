@@ -68,4 +68,10 @@ assert 14 "a = 3;
 b = 5 * 6 - 8;
 return a + b / 2;"
 
+assert 8 "
+return 3 + 5;
+a = 10;
+return 1;
+"
+
 echo OK

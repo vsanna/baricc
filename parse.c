@@ -62,6 +62,16 @@ Token* consume_ident() {
     return tok;
 }
 
+Token* consume_return() {
+    if(token->kind != TK_RETURN) {
+        return NULL;
+    }
+    Token* tok = token;
+    token = token->next;
+    return tok;
+}
+
+
 // 次のトークンが期待している記号のときにはトークンを一つ読み進める。
 // それ以外にはエラーを投げる
 void expect(char* op) {
@@ -116,11 +126,11 @@ LVar* find_lvar(Token *tok) {
     return NULL;
 }
 
-bool is_alnum(char* p) {
-    return ('a' <= *p && *p <= 'z') ||
-           ('A' <= *p && *p <= 'Z') ||
-           ('0' <= *p && *p <= '9') ||
-           (*p == '_');
+bool is_alnum(char p) {
+    return ('a' <= p && p <= 'z') ||
+           ('A' <= p && p <= 'Z') ||
+           ('0' <= p && p <= '9') ||
+           (p == '_');
 }
 
 // 入力文字列pをトークない頭してそれを返す
@@ -144,7 +154,8 @@ Token* tokenize() {
         // identの前に処理する
         // returnがきてなおかつnの次がtokenを構成する文字列ではない
         // p[6]: pの示すアドレス+6にある値
-        if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
+        // fprintf(stderr, "%s %d %d\n", p, startswith(p, "return"), is_alnum(p[6]));
+        if (startswith(p, "return") && !is_alnum(p[6])) {
             cur = new_token(TK_RETURN, cur, p, 6);
             p += 6;
             continue;
@@ -165,7 +176,7 @@ Token* tokenize() {
         // alphabet+いくつかの記号からなる文字列のまとまりは変数名
         if('a' <= *p && *p <= 'z') {
             char* start = p;
-            while(is_alnum(p)) {
+            while(is_alnum(*p)) {
                 p++;
             }
             cur = new_token(TK_IDENT, cur, start, (p-start));

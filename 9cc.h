@@ -38,6 +38,7 @@ LVar* find_lvar(Token *tok);
 
 bool consume(char* op);
 Token* consume_ident();
+Token* consume_return();
 void expect(char* op);
 int expect_number();
 bool at_eof();

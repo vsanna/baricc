@@ -16,7 +16,7 @@ typedef enum {
     TK_IF,
     TK_ELSE,
     TK_WHILE,
-    TK_FOR
+    TK_FOR,
 } TokenKind;
 
 typedef struct Token Token;
@@ -69,6 +69,7 @@ typedef enum {
     ND_FOR,
     ND_FOR_LEFT,
     ND_FOR_RIGHT,
+    ND_BLOCK,
 } NodeKind;
 
 typedef struct Node Node;
@@ -77,8 +78,9 @@ struct Node {
     NodeKind kind;
     Node* lhs;
     Node* rhs;
-    int val;     // kind == ND_NUMの場合のみ使う
-    int offset;  // ND_LVARの場合のみ使う
+    int val;       // kind == ND_NUMの場合のみ使う
+    int offset;    // ND_LVARの場合のみ使う
+    Node** block;  // kind == ND_BLOCKのときのみつかう
 };
 
 Node* new_node(NodeKind kind);

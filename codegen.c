@@ -22,6 +22,7 @@ Node* new_num(int val) {
 }
 
 // 最大stmt数(仮)
+// TODO: 100行まで対応
 Node* code[100];
 
 // program = stmt*
@@ -39,6 +40,7 @@ void program() {
 //        | "if" "(" expr ")" stmt ("else" stmt)?
 //        | "while" "(" expr ")" stmt
 //        | "for" "(" expr? ";" expr? ";" expr? ")" stmt
+//        | "{" stmt* "}"
 Node* stmt() {
     Node* node;
 
@@ -93,14 +95,32 @@ Node* stmt() {
         node->rhs = right;
 
         expect("(");
-        left->lhs = expr();
-        expect(";");
-        left->rhs = expr();
-        expect(";");
-        right->lhs = expr();
-        expect(";");
-        expect(")");
+        if (!consume(";")) {
+            left->lhs = expr();
+            expect(";");
+        }
+
+        if (!consume(";")) {
+            left->rhs = expr();
+            expect(";");
+        }
+
+        if (!consume(")")) {
+            right->lhs = expr();
+            expect(")");
+        }
+
         right->rhs = stmt();
+        return node;
+    }
+
+    if (consume("{")) {
+        Node* node = new_node(ND_BLOCK);
+        // TODO: 100行まで対応
+        node->block = calloc(100, sizeof(Node));
+        for (int i = 0; !consume("}"); i++) {
+            node->block[i] = stmt();
+        }
         return node;
     }
 
@@ -243,7 +263,11 @@ Node* primary() {
 
 // 構文木からアセンブラを作るところまで一気に進める
 int if_id = 0;
+// NOTE: ここに手を加えるときには細心の注意を払う!
+// 出力されたアセンブラをみてどこがおかしいかを把握するのは至難
 void gen(Node* node) {
+    int id = if_id;
+
     switch (node->kind) {
         case ND_NUM:
             printf("  push %d\n", node->val);
@@ -281,6 +305,7 @@ void gen(Node* node) {
             printf("  ret\n");
             return;
         case ND_IF:
+            if_id++;
             // lhs: cond
             // rhs: stmt(main) or else(lhs=main, rhs=alt)
 
@@ -291,44 +316,43 @@ void gen(Node* node) {
             // つまりjump先がalt
             printf("  cmp rax, 0\n");
             // TODO: xxxが重複しないようにする
-            printf("  je .Lelse%d\n", if_id);
+            printf("  je .Lelse%d\n", id);
 
             if (node->rhs->kind == ND_ELSE) {
                 Node* els = node->rhs;
                 gen(els->lhs);
-                printf("  jmp .Lend%d\n", if_id);
-                printf(".Lelse%d:\n", if_id);
+                printf("  jmp .Lend%d\n", id);
+                printf(".Lelse%d:\n", id);
                 gen(els->rhs);
-                printf("  jmp .Lend%d\n", if_id);
+                printf("  jmp .Lend%d\n", id);
             } else {
                 gen(node->rhs);
-                printf("  jmp .Lend%d\n", if_id);
-                printf(".Lelse%d:\n", if_id);
+                printf("  jmp .Lend%d\n", id);
+                printf(".Lelse%d:\n", id);
             }
 
-            printf(".Lend%d:\n", if_id);
-
-            if_id++;
+            printf(".Lend%d:\n", id);
 
             return;
         case ND_WHILE:
+            if_id++;
             /*
             [cond]
             je end
             [main]
             .end:
             */
-            printf(".Lbegin%d:\n", if_id);
+            printf(".Lbegin%d:\n", id);
             gen(node->lhs);
             printf("  pop rax\n");
             printf("  cmp rax, 0\n");
-            printf("  je .Lend%d\n", if_id);
+            printf("  je .Lend%d\n", id);
             gen(node->rhs);
-            printf("  jmp .Lbegin%d\n", if_id);
-            printf(".Lend%d:\n", if_id);
-            if_id++;
+            printf("  jmp .Lbegin%d\n", id);
+            printf(".Lend%d:\n", id);
             return;
         case ND_FOR:
+            if_id++;
             /*
             Aをコンパイルしたコード
             .LbeginXXX:
@@ -341,17 +365,40 @@ void gen(Node* node) {
             jmp .LbeginXXX
             .LendXXX:
             */
-            gen(node->lhs->lhs);
-            printf(".Lbegin%d:\n", if_id);
-            gen(node->lhs->rhs);
+            // 初期化
+            if (node->lhs->lhs != NULL) {
+                gen(node->lhs->lhs);
+            }
+            printf(".Lbegin%d:\n", id);
+
+            // 条件
+            if (node->lhs->rhs != NULL) {
+                gen(node->lhs->rhs);
+            } else {
+                printf("  push 1\n");  // 常にtrue
+            }
             printf("  pop rax\n");
             printf("  cmp rax, 0\n");
-            printf("  je .Lend%d\n", if_id);
-            gen(node->rhs->rhs);  // 実処理
-            gen(node->rhs->lhs);  // 後処理
-            printf("  jmp .Lbegin%d\n", if_id);
-            printf(".Lend%d:\n", if_id);
-            if_id++;
+            printf("  je .Lend%d\n", id);
+
+            // 実処理
+            gen(node->rhs->rhs);
+
+            // 後処理
+            if (node->rhs->lhs != NULL) {
+                gen(node->rhs->lhs);
+            }
+
+            printf("  jmp .Lbegin%d\n", id);
+            printf(".Lend%d:\n", id);
+            return;
+
+        case ND_BLOCK:
+            for (int i = 0; node->block[i] != NULL; i++) {
+                gen(node->block[i]);
+                // stmtの最後には値が残るため
+                printf("  pop rax\n");
+            }
             return;
     }
 

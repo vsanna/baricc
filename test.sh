@@ -111,8 +111,25 @@ else a = 2;
 return a;
 "
 
+# multi if
+assert 201 "
+a = 10;
+b = 10;
+if (a == 10)
+    a = 1;
+else
+    a = 2;
+
+if(b != 10)
+    b = 100;
+else
+    b = 200;
+
+return a + b;
+"
+
 # TODO: failする
-# assert 201 "
+# assert 199 "
 # a = 10;
 # b = 10;
 # if (a == 10)
@@ -123,11 +140,26 @@ return a;
 # if(b != 10)
 #     b = 100;
 # else
-#     b = 0 - 200;
+#     b = -200;
 
 # return a + b;
 # "
 
+# nested if
+assert 210 "
+a = 10;
+b = 10;
+
+if (a == 10)
+    if(b != 10)
+        b = 100;
+    else
+        b = 200;
+else
+    a = 2;
+
+return a + b;
+"
 
 assert 5 "
 a = 0;
@@ -139,14 +171,116 @@ return a;
 
 assert 11 "
 a = 0;
-for (i = 0; i <= 10; i = i+1;) a = a + i;
+for (i = 0; i <= 10; i = i+1) a = a + i;
 return i;
 "
 
 assert 55 "
 a = 0;
-for (i = 0; i <= 10; i = i+1;) a = a + i;
+for (i = 0; i <= 10; i = i+1) a = a + i;
 return a;
+"
+
+assert 100 "
+a = 0;
+for (;a < 100;) a = a + 1;
+return a;
+"
+
+# inf loop
+assert 100 "
+a = 0;
+for(;;)
+    if (a > 10)
+        return 100;
+    else
+        a = a + 1;
+return 0;
+"
+
+# block
+assert 100 "
+a = 0;
+for(;;) {
+    a = a + 1;
+    if (a > 10) return 100;
+}
+return -1;"
+
+assert 1 "
+a = 1;
+b = 1;
+
+if (a == 1) {
+    if (b == 1) {
+        return 1;
+    } else {
+        return 2;
+    }
+} else {
+    if (b == 1) {
+        return 3;
+    } else {
+        return 4;
+    }
+}
+"
+
+assert 2 "
+a = 1;
+b = 0;
+
+if (a == 1) {
+    if (b == 1) {
+        return 1;
+    } else {
+        return 2;
+    }
+} else {
+    if (b == 1) {
+        return 3;
+    } else {
+        return 4;
+    }
+}
+"
+
+assert 3 "
+a = 0;
+b = 1;
+
+if (a == 1) {
+    if (b == 1) {
+        return 1;
+    } else {
+        return 2;
+    }
+} else {
+    if (b == 1) {
+        return 3;
+    } else {
+        return 4;
+    }
+}
+"
+
+assert 4 "
+a = 0;
+b = 0;
+
+if (a == 1) {
+    if (b == 1) {
+        return 1;
+    } else {
+        return 2;
+    }
+} else {
+    if (b == 1) {
+        return 3;
+    } else {
+        return 4;
+    }
+}
 "
 
 echo OK

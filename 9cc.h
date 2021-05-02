@@ -13,7 +13,11 @@ typedef enum {
     TK_NUM,      // 整数トークン
     TK_EOF,      // 入力の終わりを表すトークン
     TK_IDENT,     // 識別子
-    TK_RETURN
+    TK_RETURN,
+    TK_IF,
+    TK_ELSE,
+    TK_WHILE,
+    TK_FOR
 } TokenKind;
 
 typedef struct Token Token;
@@ -39,6 +43,10 @@ LVar* find_lvar(Token *tok);
 bool consume(char* op);
 Token* consume_ident();
 Token* consume_return();
+Token* consume_if();
+Token* consume_else();
+Token* consume_for();
+Token* consume_while();
 void expect(char* op);
 int expect_number();
 bool at_eof();
@@ -61,7 +69,11 @@ typedef enum {
     ND_LE,
     ND_ASSIGN,
     ND_LVAR,    // ローカル変数
-    ND_RETURN
+    ND_RETURN,
+    ND_IF,
+    ND_ELSE,
+    ND_WHILE,
+    ND_FOR
 } NodeKind;
 
 typedef struct Node Node;
@@ -70,7 +82,8 @@ struct Node {
     NodeKind kind;
     Node *lhs;
     Node *rhs;
-    int val;   // kind == ND_NUMの場合のみ使う
+    Node *els;  // only for if/else
+    int val;    // kind == ND_NUMの場合のみ使う
     int offset; // ND_LVARの場合のみ使う
 };
 

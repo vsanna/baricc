@@ -71,6 +71,42 @@ Token* consume_return() {
     return tok;
 }
 
+Token* consume_if() {
+    if(token->kind != TK_IF) {
+        return NULL;
+    }
+    Token* tok = token;
+    token = token->next;
+    return tok;
+}
+
+Token* consume_else() {
+    if(token->kind != TK_ELSE) {
+        return NULL;
+    }
+    Token* tok = token;
+    token = token->next;
+    return tok;
+}
+
+Token* consume_for() {
+    if(token->kind != TK_FOR) {
+        return NULL;
+    }
+    Token* tok = token;
+    token = token->next;
+    return tok;
+}
+
+Token* consume_while() {
+    if(token->kind != TK_WHILE) {
+        return NULL;
+    }
+    Token* tok = token;
+    token = token->next;
+    return tok;
+}
+
 
 // 次のトークンが期待している記号のときにはトークンを一つ読み進める。
 // それ以外にはエラーを投げる
@@ -158,6 +194,30 @@ Token* tokenize() {
         if (startswith(p, "return") && !is_alnum(p[6])) {
             cur = new_token(TK_RETURN, cur, p, 6);
             p += 6;
+            continue;
+        }
+
+        if (startswith(p, "if") && !is_alnum(p[2])) {
+            cur = new_token(TK_IF, cur, p, 2);
+            p += 2;
+            continue;
+        }
+
+        if (startswith(p, "else") && !is_alnum(p[4])) {
+            cur = new_token(TK_ELSE, cur, p, 4);
+            p += 4;
+            continue;
+        }
+
+        if (startswith(p, "while") && !is_alnum(p[5])) {
+            cur = new_token(TK_WHILE, cur, p, 5);
+            p += 5;
+            continue;
+        }
+
+        if (startswith(p, "for") && !is_alnum(p[3])) {
+            cur = new_token(TK_FOR, cur, p, 3);
+            p += 3;
             continue;
         }
 

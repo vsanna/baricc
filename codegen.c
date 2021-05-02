@@ -34,13 +34,31 @@ void program() {
     code[i] = NULL;
 }
 
-// stmt = expr ";" | "return" expr ";"
+// stmt = expr ";"
+//        | "return" expr ";"
+//        | "if" "(" expr ")" stmt ("else" stmt)?
+//        | "while" "(" expr ")" stmt
+//        | "for" "(" expr? ";" expr? ";" expr? ")" stmt
 Node* stmt() {
     Node* node;
 
     if(consume_return()) {
         node = new_node(ND_RETURN);
         node->lhs = expr(); // lhsだけ持つとする
+    } else if(consume_if()) {
+        node = new_node(ND_IF);
+        expect("(");
+        node->lhs = expr(); // lhsをcondとする
+        expect(")");
+        node->rhs = stmt();
+
+        if(consume_else()) {
+            node->els = stmt(); // rhsを処理とする
+        }
+        return node;
+    // } else if(consume_else()) {
+    // } else if(consume_while()) {
+    // } else if(consume_for()) {
     } else {
         node = expr();
     }
@@ -220,6 +238,34 @@ void gen(Node* node) {
         printf("  mov rsp, rbp\n");
         printf("  pop rbp\n");
         printf("  ret\n");
+        return;
+    case ND_IF:
+        // lhs: cond
+        // rhs: stmt
+        // els: alternative
+
+        // cond
+        gen(node->lhs);
+        printf("  pop rax\n");
+        // lhs(=cond)の結果が0(=false)だったらjump
+        // つまりjump先がalt
+        printf("  cmp rax, 0\n");
+        // TODO: xxxが重複しないようにする
+        printf("  je .LelseXXX\n");
+
+        // main
+        gen(node->rhs);
+        printf("  jmp .LendXXX\n");
+
+        // alt
+        printf(".LelseXXX:\n");
+        // elsあれば出力
+        if (node->els != NULL) {
+            gen(node->els);
+        }
+
+        printf(".LendXXX:\n");
+
         return;
     }
 

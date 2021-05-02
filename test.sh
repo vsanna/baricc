@@ -128,4 +128,25 @@ return a;
 # return a + b;
 # "
 
+
+assert 5 "
+a = 0;
+while(a < 5)
+    a = a + 1;
+
+return a;
+"
+
+assert 11 "
+a = 0;
+for (i = 0; i <= 10; i = i+1;) a = a + i;
+return i;
+"
+
+assert 55 "
+a = 0;
+for (i = 0; i <= 10; i = i+1;) a = a + i;
+return a;
+"
+
 echo OK

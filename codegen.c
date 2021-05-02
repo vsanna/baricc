@@ -16,13 +16,13 @@ Node* new_binary(NodeKind kind, Node* lhs, Node* rhs) {
 
 // 数字のnodeを作る特殊
 Node* new_num(int val) {
-    Node *node = new_node(ND_NUM);
+    Node* node = new_node(ND_NUM);
     node->val = val;
     return node;
 }
 
 // 最大stmt数(仮)
-Node *code[100];
+Node* code[100];
 
 // program = stmt*
 void program() {
@@ -42,16 +42,14 @@ void program() {
 Node* stmt() {
     Node* node;
 
-    if(consume_kind(TK_RETURN)) {
+    if (consume_kind(TK_RETURN)) {
         node = new_node(ND_RETURN);
-        node->lhs = expr(); // lhsだけ持つとする
-    } else if(consume_kind(TK_IF)) {
-        node = new_node(ND_IF);
-        expect("(");
-        node->lhs = expr(); // lhsをcondとする
-        expect(")");
-        node->rhs = stmt();
+        node->lhs = expr();  // lhsだけ持つとする
+        expect(";");
+        return node;
+    }
 
+    if (consume_kind(TK_IF)) {
         /*
         # elseなし
         if -lhs- cond
@@ -62,28 +60,57 @@ Node* stmt() {
            -rhs- else -lhs- main
                       -rhs- alt(stmt)
         */
-        if(consume_kind(TK_ELSE)) {
+        node = new_node(ND_IF);
+        expect("(");
+        node->lhs = expr();  // lhsをcondとする
+        expect(")");
+        node->rhs = stmt();
+        if (consume_kind(TK_ELSE)) {
             Node* els = new_node(ND_ELSE);
             els->lhs = node->rhs;
             els->rhs = stmt();
             node->rhs = els;
         }
         return node;
-    // } else if(consume_kind(TK_ELSE)) {
-    // } else if(consume_kind(TK_WHILE)) {
-    // } else if(consume_kind(TK_FOR)) {
-    } else {
-        node = expr();
     }
 
+    if (consume_kind(TK_WHILE)) {
+        Node* node = new_node(ND_WHILE);
+        expect("(");
+        node->lhs = expr();
+        expect(")");
+        node->rhs = stmt();
+        return node;
+    }
+
+    if (consume_kind(TK_FOR)) {
+        // leftは初期化と終了条件を、
+        // rightは後処理とstmtを保持
+        Node* node = new_node(ND_FOR);
+        Node* left = new_node(ND_FOR_LEFT);
+        Node* right = new_node(ND_FOR_RIGHT);
+        node->lhs = left;
+        node->rhs = right;
+
+        expect("(");
+        left->lhs = expr();
+        expect(";");
+        left->rhs = expr();
+        expect(";");
+        right->lhs = expr();
+        expect(";");
+        expect(")");
+        right->rhs = stmt();
+        return node;
+    }
+
+    node = expr();
     expect(";");
     return node;
 }
 
 // expr = assign
-Node* expr() {
-    return assign();
-}
+Node* expr() { return assign(); }
 
 // assign = equality ("=" equality)?
 Node* assign() {
@@ -100,7 +127,7 @@ Node* assign() {
 Node* equality() {
     Node* node = relational();
 
-    for(;;) {
+    for (;;) {
         if (consume("==")) {
             node = new_binary(ND_EQ, node, relational());
         } else if (consume("!=")) {
@@ -115,9 +142,10 @@ Node* equality() {
 Node* relational() {
     Node* node = add();
 
-    for(;;) {
+    for (;;) {
         // TODO: こっち先でよいの?
-        // -> OK. なぜならconsumeが見ているのは次のtokenなのですでに<か<=かは考慮済みなので
+        // -> OK.
+        // なぜならconsumeが見ているのは次のtokenなのですでに<か<=かは考慮済みなので
         if (consume("<")) {
             node = new_binary(ND_LT, node, add());
         } else if (consume("<=")) {
@@ -136,7 +164,7 @@ Node* relational() {
 Node* add() {
     Node* node = mul();
 
-    for(;;) {
+    for (;;) {
         if (consume("+")) {
             node = new_binary(ND_ADD, node, mul());
         } else if (consume("-")) {
@@ -188,9 +216,9 @@ Node* primary() {
         Node* node = new_node(ND_LVAR);
         LVar* lvar = find_lvar(tok);
         // すでに宣言済みの変数であればそのoffsetを使う
-        if(lvar) {
+        if (lvar) {
             node->offset = lvar->offset;
-        // 新規変数であればlvarを追加する
+            // 新規変数であればlvarを追加する
         } else {
             lvar = calloc(1, sizeof(LVar));
             lvar->next = locals;
@@ -213,77 +241,118 @@ Node* primary() {
     return new_num(expect_number());
 }
 
-
 // 構文木からアセンブラを作るところまで一気に進める
 int if_id = 0;
 void gen(Node* node) {
-    switch(node->kind) {
-    case ND_NUM:
-        printf("  push %d\n", node->val);
-        return;
-    case ND_LVAR:
-        // 左辺値のアドレスをスタックの先頭にpushし、
-        gen_lval(node);
-        // そのアドレスをraxにいれ
-        printf("  pop rax\n");
-        // そのアドレスにある値をraxにいれ、
-        printf("  mov rax, [rax]\n");
-        // その値をスタックの先頭にpush
-        printf("  push rax\n");
-        return;
-    case ND_ASSIGN:
-        // 左辺の左辺値のアドレスをstackにpush
-        gen_lval(node->lhs);
-        // 右辺を計算した値をstackにpush
-        gen(node->rhs);
-        // rdiに計算結果をpopしてrdiにいれる
-        printf("  pop rdi\n");
-        // 左辺のアドレスをpopしてraxに入れる
-        printf("  pop rax\n");
-        // raxのアドレスの指す場所にrdiを入れる
-        printf("  mov [rax], rdi\n");
-        // rdiの値 = 計算結果をstackの頂点に入れておく
-        // こうすることで a = b = 10 みたいな式がかける
-        printf("  push rdi\n");
-        return;
-    case ND_RETURN:
-        gen(node->lhs);
-        printf("  pop rax\n");
-        printf("  mov rsp, rbp\n");
-        printf("  pop rbp\n");
-        printf("  ret\n");
-        return;
-    case ND_IF:
-        // lhs: cond
-        // rhs: stmt(main) or else(lhs=main, rhs=alt)
-
-        // cond
-        gen(node->lhs);
-        printf("  pop rax\n");
-        // lhs(=cond)の結果が0(=false)だったらjump
-        // つまりjump先がalt
-        printf("  cmp rax, 0\n");
-        // TODO: xxxが重複しないようにする
-        printf("  je .Lelse%d\n", if_id);
-
-        if(node->rhs->kind == ND_ELSE) {
-            Node* els = node->rhs;
-            gen(els->lhs);
-            printf("  jmp .Lend%d\n", if_id);
-            printf(".Lelse%d:\n", if_id);
-            gen(els->rhs);
-            printf("  jmp .Lend%d\n", if_id);
-        } else {
+    switch (node->kind) {
+        case ND_NUM:
+            printf("  push %d\n", node->val);
+            return;
+        case ND_LVAR:
+            // 左辺値のアドレスをスタックの先頭にpushし、
+            gen_lval(node);
+            // そのアドレスをraxにいれ
+            printf("  pop rax\n");
+            // そのアドレスにある値をraxにいれ、
+            printf("  mov rax, [rax]\n");
+            // その値をスタックの先頭にpush
+            printf("  push rax\n");
+            return;
+        case ND_ASSIGN:
+            // 左辺の左辺値のアドレスをstackにpush
+            gen_lval(node->lhs);
+            // 右辺を計算した値をstackにpush
             gen(node->rhs);
-            printf("  jmp .Lend%d\n", if_id);
-            printf(".Lelse%d:\n", if_id);
-        }
+            // rdiに計算結果をpopしてrdiにいれる
+            printf("  pop rdi\n");
+            // 左辺のアドレスをpopしてraxに入れる
+            printf("  pop rax\n");
+            // raxのアドレスの指す場所にrdiを入れる
+            printf("  mov [rax], rdi\n");
+            // rdiの値 = 計算結果をstackの頂点に入れておく
+            // こうすることで a = b = 10 みたいな式がかける
+            printf("  push rdi\n");
+            return;
+        case ND_RETURN:
+            gen(node->lhs);
+            printf("  pop rax\n");
+            printf("  mov rsp, rbp\n");
+            printf("  pop rbp\n");
+            printf("  ret\n");
+            return;
+        case ND_IF:
+            // lhs: cond
+            // rhs: stmt(main) or else(lhs=main, rhs=alt)
 
-        printf(".Lend%d:\n", if_id);
+            // cond
+            gen(node->lhs);
+            printf("  pop rax\n");
+            // lhs(=cond)の結果が0(=false)だったらjump
+            // つまりjump先がalt
+            printf("  cmp rax, 0\n");
+            // TODO: xxxが重複しないようにする
+            printf("  je .Lelse%d\n", if_id);
 
-        if_id++;
+            if (node->rhs->kind == ND_ELSE) {
+                Node* els = node->rhs;
+                gen(els->lhs);
+                printf("  jmp .Lend%d\n", if_id);
+                printf(".Lelse%d:\n", if_id);
+                gen(els->rhs);
+                printf("  jmp .Lend%d\n", if_id);
+            } else {
+                gen(node->rhs);
+                printf("  jmp .Lend%d\n", if_id);
+                printf(".Lelse%d:\n", if_id);
+            }
 
-        return;
+            printf(".Lend%d:\n", if_id);
+
+            if_id++;
+
+            return;
+        case ND_WHILE:
+            /*
+            [cond]
+            je end
+            [main]
+            .end:
+            */
+            printf(".Lbegin%d:\n", if_id);
+            gen(node->lhs);
+            printf("  pop rax\n");
+            printf("  cmp rax, 0\n");
+            printf("  je .Lend%d\n", if_id);
+            gen(node->rhs);
+            printf("  jmp .Lbegin%d\n", if_id);
+            printf(".Lend%d:\n", if_id);
+            if_id++;
+            return;
+        case ND_FOR:
+            /*
+            Aをコンパイルしたコード
+            .LbeginXXX:
+            Bをコンパイルしたコード
+            pop rax
+            cmp rax, 0
+            je  .LendXXX
+            Dをコンパイルしたコード
+            Cをコンパイルしたコード
+            jmp .LbeginXXX
+            .LendXXX:
+            */
+            gen(node->lhs->lhs);
+            printf(".Lbegin%d:\n", if_id);
+            gen(node->lhs->rhs);
+            printf("  pop rax\n");
+            printf("  cmp rax, 0\n");
+            printf("  je .Lend%d\n", if_id);
+            gen(node->rhs->rhs);  // 実処理
+            gen(node->rhs->lhs);  // 後処理
+            printf("  jmp .Lbegin%d\n", if_id);
+            printf(".Lend%d:\n", if_id);
+            if_id++;
+            return;
     }
 
     gen(node->lhs);
@@ -292,7 +361,7 @@ void gen(Node* node) {
     printf("  pop rdi\n");
     printf("  pop rax\n");
 
-    switch(node->kind) {
+    switch (node->kind) {
         case ND_ADD:
             printf("  add rax, rdi\n");
             break;
@@ -306,15 +375,17 @@ void gen(Node* node) {
             printf("  cqo\n");
             /*
             idiv: 符号あり除算.
-            暗黙的にrdx, raxをとってそれを合わせたものを128bit整数とみなしてそれを引数レジスタの64bitでわり、
+            暗黙的にrdx,
+            raxをとってそれを合わせたものを128bit整数とみなしてそれを引数レジスタの64bitでわり、
             商をraxに、あまりをrdxにセットする
-            cqo命令を使うとraxに入っている64bitの値を128bitに伸ばしてrdx, raxにセットすることが出来る
+            cqo命令を使うとraxに入っている64bitの値を128bitに伸ばしてrdx,
+            raxにセットすることが出来る
 
             pop rdi   // stackから取り出して割る数としてset
             pop rax   // stackから取り出して割られる数としてset
-            cqo       // rdx, rax <- 10 を代入する命令. 全体で10なので、rdxは0が入る
-            idiv rdi  // rdx,rax(10) / rdi を行い、商をrax, あまりをrdxにset
-            push rax  // 答えをpush
+            cqo       // rdx, rax <- 10 を代入する命令.
+            全体で10なので、rdxは0が入る idiv rdi  // rdx,rax(10) / rdi
+            を行い、商をrax, あまりをrdxにset push rax  // 答えをpush
             */
             printf("  idiv rdi\n");
             break;

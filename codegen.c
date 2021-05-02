@@ -42,23 +42,36 @@ void program() {
 Node* stmt() {
     Node* node;
 
-    if(consume_return()) {
+    if(consume_kind(TK_RETURN)) {
         node = new_node(ND_RETURN);
         node->lhs = expr(); // lhsだけ持つとする
-    } else if(consume_if()) {
+    } else if(consume_kind(TK_IF)) {
         node = new_node(ND_IF);
         expect("(");
         node->lhs = expr(); // lhsをcondとする
         expect(")");
         node->rhs = stmt();
 
-        if(consume_else()) {
-            node->els = stmt(); // rhsを処理とする
+        /*
+        # elseなし
+        if -lhs- cond
+           -rhs- main
+
+        # elseあり
+        if -lhs- cond
+           -rhs- else -lhs- main
+                      -rhs- alt(stmt)
+        */
+        if(consume_kind(TK_ELSE)) {
+            Node* els = new_node(ND_ELSE);
+            els->lhs = node->rhs;
+            els->rhs = stmt();
+            node->rhs = els;
         }
         return node;
-    // } else if(consume_else()) {
-    // } else if(consume_while()) {
-    // } else if(consume_for()) {
+    // } else if(consume_kind(TK_ELSE)) {
+    // } else if(consume_kind(TK_WHILE)) {
+    // } else if(consume_kind(TK_FOR)) {
     } else {
         node = expr();
     }
@@ -170,7 +183,7 @@ Node* primary() {
     }
 
     // ident
-    Token* tok = consume_ident();
+    Token* tok = consume_kind(TK_IDENT);
     if (tok) {
         Node* node = new_node(ND_LVAR);
         LVar* lvar = find_lvar(tok);
@@ -202,6 +215,7 @@ Node* primary() {
 
 
 // 構文木からアセンブラを作るところまで一気に進める
+int if_id = 0;
 void gen(Node* node) {
     switch(node->kind) {
     case ND_NUM:
@@ -241,8 +255,7 @@ void gen(Node* node) {
         return;
     case ND_IF:
         // lhs: cond
-        // rhs: stmt
-        // els: alternative
+        // rhs: stmt(main) or else(lhs=main, rhs=alt)
 
         // cond
         gen(node->lhs);
@@ -251,20 +264,24 @@ void gen(Node* node) {
         // つまりjump先がalt
         printf("  cmp rax, 0\n");
         // TODO: xxxが重複しないようにする
-        printf("  je .LelseXXX\n");
+        printf("  je .Lelse%d\n", if_id);
 
-        // main
-        gen(node->rhs);
-        printf("  jmp .LendXXX\n");
-
-        // alt
-        printf(".LelseXXX:\n");
-        // elsあれば出力
-        if (node->els != NULL) {
-            gen(node->els);
+        if(node->rhs->kind == ND_ELSE) {
+            Node* els = node->rhs;
+            gen(els->lhs);
+            printf("  jmp .Lend%d\n", if_id);
+            printf(".Lelse%d:\n", if_id);
+            gen(els->rhs);
+            printf("  jmp .Lend%d\n", if_id);
+        } else {
+            gen(node->rhs);
+            printf("  jmp .Lend%d\n", if_id);
+            printf(".Lelse%d:\n", if_id);
         }
 
-        printf(".LendXXX:\n");
+        printf(".Lend%d:\n", if_id);
+
+        if_id++;
 
         return;
     }

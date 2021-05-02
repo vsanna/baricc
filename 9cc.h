@@ -41,12 +41,7 @@ struct LVar {
 LVar* find_lvar(Token *tok);
 
 bool consume(char* op);
-Token* consume_ident();
-Token* consume_return();
-Token* consume_if();
-Token* consume_else();
-Token* consume_for();
-Token* consume_while();
+Token* consume_kind(TokenKind kind);
 void expect(char* op);
 int expect_number();
 bool at_eof();
@@ -82,7 +77,6 @@ struct Node {
     NodeKind kind;
     Node *lhs;
     Node *rhs;
-    Node *els;  // only for if/else
     int val;    // kind == ND_NUMの場合のみ使う
     int offset; // ND_LVARの場合のみ使う
 };

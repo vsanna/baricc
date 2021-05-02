@@ -111,17 +111,21 @@ else a = 2;
 return a;
 "
 
-# assert -100 "
+# TODO: failする
+# assert 201 "
 # a = 10;
 # b = 10;
 # if (a == 10)
-#     if(b != 10)
-#         a = 100;
-#     else
-#         a = -100;
+#     a = 1;
 # else
 #     a = 2;
-# return a;
+
+# if(b != 10)
+#     b = 100;
+# else
+#     b = 0 - 200;
+
+# return a + b;
 # "
 
 echo OK

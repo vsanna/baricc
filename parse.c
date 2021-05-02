@@ -50,63 +50,16 @@ bool consume(char* op) {
     return true;
 }
 
-// TODO: これほんと?
-// 次のトークンがidentであれば一つ読み進めてそのtokenを返す
+// 次のトークンが指定したtokenであれば一つ読み進めてそのtokenを返す
 // それ以外はNULL
-Token* consume_ident() {
-    if(token->kind != TK_IDENT) {
+Token* consume_kind(TokenKind kind) {
+    if(token->kind != kind) {
         return NULL;
     }
     Token* tok = token;
     token = token->next;
     return tok;
 }
-
-Token* consume_return() {
-    if(token->kind != TK_RETURN) {
-        return NULL;
-    }
-    Token* tok = token;
-    token = token->next;
-    return tok;
-}
-
-Token* consume_if() {
-    if(token->kind != TK_IF) {
-        return NULL;
-    }
-    Token* tok = token;
-    token = token->next;
-    return tok;
-}
-
-Token* consume_else() {
-    if(token->kind != TK_ELSE) {
-        return NULL;
-    }
-    Token* tok = token;
-    token = token->next;
-    return tok;
-}
-
-Token* consume_for() {
-    if(token->kind != TK_FOR) {
-        return NULL;
-    }
-    Token* tok = token;
-    token = token->next;
-    return tok;
-}
-
-Token* consume_while() {
-    if(token->kind != TK_WHILE) {
-        return NULL;
-    }
-    Token* tok = token;
-    token = token->next;
-    return tok;
-}
-
 
 // 次のトークンが期待している記号のときにはトークンを一つ読み進める。
 // それ以外にはエラーを投げる

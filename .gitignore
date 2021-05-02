@@ -5,3 +5,4 @@ tmp*
 .devcontainer/
 
 *.o
+core

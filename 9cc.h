@@ -17,6 +17,8 @@ typedef enum {
     TK_ELSE,
     TK_WHILE,
     TK_FOR,
+    TK_INT,   // int
+    TK_CHAR,  // char
 } TokenKind;
 
 typedef struct Token Token;
@@ -47,7 +49,7 @@ bool at_eof();
 Token* new_token(TokenKind kind, Token* cur, char* str, int len);
 bool startswith(char* p, char* q);
 Token* tokenize();
-
+void register_lval(Token* tok);
 // codegen
 // 抽象構文木のノードの種類
 typedef enum {
@@ -70,6 +72,10 @@ typedef enum {
     ND_FOR_LEFT,
     ND_FOR_RIGHT,
     ND_BLOCK,
+    ND_FUNC_CALL,
+    ND_FUNC_DEF,
+    ND_ADDR,
+    ND_DEREF,
 } NodeKind;
 
 typedef struct Node Node;
@@ -78,9 +84,11 @@ struct Node {
     NodeKind kind;
     Node* lhs;
     Node* rhs;
-    int val;       // kind == ND_NUMの場合のみ使う
-    int offset;    // ND_LVARの場合のみ使う
-    Node** block;  // kind == ND_BLOCKのときのみつかう
+    Node** block;    // kind == ND_BLOCKのときのみつかう
+    int val;         // kind == ND_NUMの場合のみ使う
+    int offset;      // ND_LVARの場合のみ使う
+    char* funcname;  // ND_FUNC_CALL, ND_FUNC_DEF で使う
+    Node** args;     // ND_FUNC_DEFのときのみ。
 };
 
 Node* new_node(NodeKind kind);
@@ -91,6 +99,8 @@ Node* new_num(int val);
 // LinkedList<Token>から Nodeを構築する
 void program();
 Node* stmt();
+Node* block();
+Node* func_def();
 Node* expr();
 Node* assign();
 Node* expr();
@@ -100,6 +110,8 @@ Node* add();
 Node* mul();
 Node* unary();
 Node* primary();
+Node* define_variable(Token* tok);
+Node* variable(Token* tok);
 
 // 構文木からアセンブラを作るところまで一気に進める
 void gen(Node* node);
@@ -114,4 +126,4 @@ void error(char* fmt, ...);
 extern Token* token;
 extern char* user_input;
 extern Node* code[100];
-extern LVar* locals;
+extern LVar* locals[100];

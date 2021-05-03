@@ -2,7 +2,8 @@
 
 Token *token;
 char *user_input;
-LVar *locals;
+LVar *locals[100];
+int cur_scope_depth = 0;
 
 // util
 void print_token(Token *token) {
@@ -104,7 +105,7 @@ bool startswith(char *p, char *q) { return memcmp(p, q, strlen(q)) == 0; }
 
 // local変数を探してあればそれを返す。なければNULLを返す
 LVar *find_lvar(Token *tok) {
-    for (LVar *var = locals; var; var = var->next) {
+    for (LVar *var = locals[cur_scope_depth]; var; var = var->next) {
         // NOTE: memcmpは一致していたら0を返す
         if (var->len == tok->len && !memcmp(tok->str, var->name, var->len)) {
             return var;
@@ -125,7 +126,8 @@ typedef struct ReservedWord {
 
 ReservedWord reserved_words[] = {
     {"return", TK_RETURN}, {"if", TK_IF},   {"else", TK_ELSE},
-    {"while", TK_WHILE},   {"for", TK_FOR}, {"", TK_EOF},
+    {"while", TK_WHILE},   {"for", TK_FOR}, {"int", TK_INT},
+    {"char", TK_CHAR},     {"", TK_EOF},
 };
 
 // 入力文字列pをトークない頭してそれを返す
@@ -204,7 +206,7 @@ Token *tokenize() {
             continue;
         }
 
-        if (strchr("+-*/()<>;={}", *p)) {
+        if (strchr("+-*/()<>;={},&", *p)) {
             cur = new_token(TK_RESERVED, cur, p, 1);
             p++;
             continue;

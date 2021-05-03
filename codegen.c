@@ -1,5 +1,6 @@
 #include "9cc.h"
-LVar* locals;
+LVar* locals[];
+int cur_scope_depth;
 
 Node* new_node(NodeKind kind) {
     Node* node = calloc(1, sizeof(Node));
@@ -25,14 +26,53 @@ Node* new_num(int val) {
 // TODO: 100行まで対応
 Node* code[100];
 
-// program = stmt*
+// program = ident "(" ")" block
+// programをまずは関数の束とする
 void program() {
     int i = 0;
     while (!at_eof()) {
-        code[i] = stmt();
+        code[i] = func_def();
         i++;
     }
     code[i] = NULL;
+}
+
+// func_def = ident "(" (ident ",")* ")" block
+Node* func_def() {
+    // TODO: 本当? 呼び出しごとでは?
+    cur_scope_depth++;
+
+    Node* node = NULL;
+    Token* tok = consume_kind(TK_IDENT);
+    if (tok) {
+        node = new_node(ND_FUNC_DEF);
+        node->funcname = calloc(100, sizeof(char));
+        memcpy(node->funcname, tok->str, tok->len);
+        node->args = calloc(10, sizeof(char*));
+        node->block = calloc(100, sizeof(Node));
+
+        expect("(");
+        // ここは関数定義なので引数の名称のみ保持
+        for (int i = 0; !consume(")"); i++) {
+            if (i != 0) {
+                expect(",");
+            }
+
+            Token* tok = consume_kind(TK_IDENT);
+            if (tok) {
+                // node->args[i] = calloc(100, sizeof(char));
+                // memcpy(node->args[i], tok->str, tok->len);
+                Node* variable_node = define_variable(tok);
+                node->args[i] = variable_node;
+            } else {
+                break;
+            }
+        }
+        node->lhs = block();
+    } else {
+        error("here function must come");
+    }
+    return node;
 }
 
 // stmt = expr ";"
@@ -40,7 +80,8 @@ void program() {
 //        | "if" "(" expr ")" stmt ("else" stmt)?
 //        | "while" "(" expr ")" stmt
 //        | "for" "(" expr? ";" expr? ";" expr? ")" stmt
-//        | "{" stmt* "}"
+//        | block
+//        | "int" ident ";""
 Node* stmt() {
     Node* node;
 
@@ -114,18 +155,35 @@ Node* stmt() {
         return node;
     }
 
+    if (consume_kind(TK_INT)) {
+        Token* tok = consume_kind(TK_IDENT);
+        if (tok) {
+            expect(";");
+            return define_variable(tok);
+        }
+    }
+
+    Node* block_node = block();
+    if (block_node != NULL) {
+        return block_node;
+    }
+
+    node = expr();
+    expect(";");
+    return node;
+}
+
+// block = "{" stmt* "}"
+Node* block() {
+    Node* node = NULL;
     if (consume("{")) {
-        Node* node = new_node(ND_BLOCK);
+        node = new_node(ND_BLOCK);
         // TODO: 100行まで対応
         node->block = calloc(100, sizeof(Node));
         for (int i = 0; !consume("}"); i++) {
             node->block[i] = stmt();
         }
-        return node;
     }
-
-    node = expr();
-    expect(";");
     return node;
 }
 
@@ -209,7 +267,7 @@ Node* mul() {
     }
 }
 
-// unary = ("+"" | "-"")? unary | primary
+// unary = ("+"" | "-" | "*" | "&")? unary | primary
 Node* unary() {
     if (consume("+")) {
         return unary();
@@ -217,11 +275,19 @@ Node* unary() {
     if (consume("-")) {
         return new_binary(ND_SUB, new_num(0), unary());
     }
+    if (consume("*")) {
+        return new_binary(ND_DEREF, unary(), NULL);
+    }
+    if (consume("&")) {
+        return new_binary(ND_ADDR, unary(), NULL);
+    }
 
     return primary();
 }
 
-// primary = num | ident | "(" expr ")"
+// primary = num
+//           | ident ("(" (expr ",")* ")")?
+//           | "(" expr ")"
 Node* primary() {
     // 次のトークンが ( なら ( expr ) のハズ
     if (consume("(")) {
@@ -233,40 +299,94 @@ Node* primary() {
     // ident
     Token* tok = consume_kind(TK_IDENT);
     if (tok) {
-        Node* node = new_node(ND_LVAR);
-        LVar* lvar = find_lvar(tok);
-        // すでに宣言済みの変数であればそのoffsetを使う
-        if (lvar) {
-            node->offset = lvar->offset;
-            // 新規変数であればlvarを追加する
-        } else {
-            lvar = calloc(1, sizeof(LVar));
-            lvar->next = locals;
-            lvar->name = tok->str;
-            lvar->len = tok->len;
-
-            if (locals == NULL) {
-                lvar->offset = 8;
-            } else {
-                lvar->offset = locals->offset + 8;
+        // 関数呼び出しの場合
+        if (consume("(")) {
+            // node->blockに引数となるexprを詰める
+            Node* node = new_node(ND_FUNC_CALL);
+            node->funcname = calloc(100, sizeof(char));
+            memcpy(node->funcname, tok->str, tok->len);
+            // TODO: 引数とりあえず10こまで。
+            node->block = calloc(10, sizeof(Node));
+            for (int i = 0; !consume(")"); i++) {
+                if (i != 0) {
+                    expect(",");
+                }
+                node->block[i] = expr();
             }
 
-            node->offset = lvar->offset;
-            locals = lvar;
+            return node;
         }
-        return node;
+
+        // 変数呼び出しの場合
+        return variable(tok);
     }
 
     // そうでなければnumのハズ
     return new_num(expect_number());
 }
 
+// 変数ノードの宣言用. lvarが見つかったらエラーを返すためのもの。
+// TODO: これは意味解析も一緒にやっちゃってないか? それはいいの?
+// TODO: scopeが異なる変数が見つかった場合はエラーではないが,
+// 同一scopeで見つかったらエラーみたいなことをするにはまたロジックを考える必要がある
+// TODO: block切って同名/別型変数を宣言したときに既存言語でエラーになるかどうか
+Node* define_variable(Token* tok) {
+    Node* node = new_node(ND_LVAR);
+    LVar* lvar = find_lvar(tok);
+    if (lvar) {
+        char name[100] = {0};
+        memcpy(name, tok->str, tok->len);
+        error("redefining variable %s", name);
+    }
+
+    // 新規変数であればlvarを追加する
+    register_lval(tok);
+    node->offset = locals[cur_scope_depth]->offset;
+    return node;
+}
+
+// TODO: これは本当? 外のscopeの値をそのまま利用 or
+// ウワがいてしまう
+// 変数ノードの生成+変数をlocalsに登録
+Node* variable(Token* tok) {
+    Node* node = new_node(ND_LVAR);
+    LVar* lvar = find_lvar(tok);
+    if (lvar == NULL) {
+        char name[100] = {0};
+        memcpy(name, tok->str, tok->len);
+        error("variable %s is not defined yet", name);
+    }
+
+    // すでに宣言済みの変数であればそのoffsetを使う
+    node->offset = lvar->offset;
+    return node;
+}
+
+// 受け取ったTK_IDENTのtokenをLVarとして登録
+void register_lval(Token* tok) {
+    LVar* lvar = calloc(1, sizeof(LVar));
+    lvar->next = locals[cur_scope_depth];
+    lvar->name = tok->str;
+    lvar->len = tok->len;
+
+    if (locals[cur_scope_depth] == NULL) {
+        lvar->offset = 8;
+    } else {
+        lvar->offset = locals[cur_scope_depth]->offset + 8;
+    }
+    locals[cur_scope_depth] = lvar;
+}
+
+char* argregs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+
+// TODO: ここが評価(コード生成)ロジックの中心なので別ファイルに後で移す.
 // 構文木からアセンブラを作るところまで一気に進める
 int if_id = 0;
 // NOTE: ここに手を加えるときには細心の注意を払う!
 // 出力されたアセンブラをみてどこがおかしいかを把握するのは至難
 void gen(Node* node) {
     int id = if_id;
+    int num_args = 0;
 
     switch (node->kind) {
         case ND_NUM:
@@ -299,8 +419,8 @@ void gen(Node* node) {
             return;
         case ND_RETURN:
             gen(node->lhs);
-            printf("  pop rax\n");
-            printf("  mov rsp, rbp\n");
+            printf("  pop rax\n");       // 値をraxにset(ABI)
+            printf("  mov rsp, rbp\n");  // epilogueをreturn時にも忘れず処理
             printf("  pop rbp\n");
             printf("  ret\n");
             return;
@@ -396,9 +516,100 @@ void gen(Node* node) {
         case ND_BLOCK:
             for (int i = 0; node->block[i] != NULL; i++) {
                 gen(node->block[i]);
-                // stmtの最後には値が残るため
-                printf("  pop rax\n");
             }
+            return;
+        case ND_FUNC_CALL:
+            if_id++;
+            /*
+            call前に引数をABIの定義するレジスタに登録する
+            TODO: epilogueでpushするんじゃないのか?
+                -> epilogueは関数のラベルの直下で書くもの.
+                -> つまりココではない!
+            TODO: 一旦引数は6個までサポート
+            */
+
+            // 引数をまず評価. stackにpushしていく
+            for (int i = 0; node->block[i] != NULL; i++) {
+                gen(node->block[i]);
+                num_args++;
+            }
+            if (num_args > 6) {
+                error_at(token->str, "invalid number of args. lteq 6.");
+            }
+
+            // 引数を"後ろから"ABI指定のregに投入
+            // 現在stackの一番上には最後の引数を評価した値が入っている
+            for (int i = num_args - 1; i >= 0; i--) {
+                printf("  pop %s\n", argregs[i]);
+            }
+
+            // RSPを16の倍数にする調整
+            printf("  mov rax, rsp\n");
+            printf("  and rax, 15\n");  // 下位4bitがすべて0なら16の倍数
+            printf("  cmp rsi, 0\n");
+            printf("  je .L.callDirectly.%d\n", id);
+            printf("  mov rax, 0\n");
+            printf("  sub rsp, 8\n");
+            printf("  call %s\n", node->funcname);
+            printf("  add rsp, 8\n");
+            printf("  jmp .L.called.%d\n", id);
+            // 次のラインをreturn addrとしてstackに積みつつ関数のところにjump
+            printf(".L.callDirectly.%d:\n", id);
+            printf("  mov rax, 0\n");
+            printf("  call %s\n", node->funcname);
+            printf(".L.called.%d:\n", id);
+            printf("  push rax\n");  // raxに返り値が格納されている(ABI)
+            return;
+        case ND_FUNC_DEF:
+            // label
+            printf("%s:\n", node->funcname);
+
+            // エピローグ
+            /*
+            ret address  <- (1) call直後のRSP
+            caller's RBP <- (2) ましたの2命令が終わったあとのRSP, RBP
+            arg0
+            arg1
+            ...
+            */
+            printf("  push rbp\n");
+            printf("  mov rbp, rsp\n");
+            for (int i = 0; node->args[i]; i++) {
+                printf("  push %s\n", argregs[i]);
+                num_args++;
+            }
+            // 引数の数を覗いた変数の数文rspを"さらに"ずらして、変数領域を確保する
+            // この関数のためだけのlocals領域を確保するようなイメージ
+            // TODO: えー、本当? 理論と実践ではどうしてたっけ
+            if (locals[cur_scope_depth]) {
+                int offset = locals[cur_scope_depth]->offset;
+                offset -= num_args * 8;
+                printf("  sub rsp, %d\n", offset);
+            }
+
+            // 内容
+            gen(node->lhs);
+
+            // プロローグ
+            // printf("  mov rax, 0\n");
+            printf("  mov rsp, rbp\n");
+            printf("  pop rbp\n");
+            printf("  ret\n");
+
+            return;
+        case ND_ADDR:
+            /* [&の次に来る変数のアドレス]をpushする */
+            gen_lval(node->lhs);
+            return;
+        case ND_DEREF:
+            /*
+            [アドレスの値]をpushした上で、それから値をとってきてpushし直す
+            ND_LVARとほぼ同じ処理
+            */
+            gen(node->lhs);
+            printf("  pop rax\n");
+            printf("  mov rax, [rax]\n");
+            printf("  push rax\n");
             return;
     }
 
@@ -461,7 +672,9 @@ void gen(Node* node) {
     printf("  push rax\n");
 }
 
-// nodeが左辺値ならその変数に入っている値をstackにpushする
+/*
+odeが左辺値なら、その変数の「アドレス」をstackにpushする
+*/
 void gen_lval(Node* node) {
     if (node->kind != ND_LVAR) {
         error("代入の左辺値が変数ではありません");

@@ -1,3 +1,10 @@
+# アセンブラを渡す
+cc -o main main.c
+./main 123
+cc -o tmp tmp.s
+./tmp
+echo $?
+
 ## 機械語とアセンブラ
 ### アセンブラ
 objdump -d -M /bin/ls

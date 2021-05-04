@@ -31,6 +31,7 @@ struct Token {
 };
 
 // 型情報. ptr/arrayはその先の型情報も必要なので、それをptr_toとして持つ
+// TODO ptr_toをofとかにrenameしたい
 typedef struct Type {
     enum { INT, PTR, ARRAY } ty;
     struct Type*
@@ -142,3 +143,4 @@ extern Token* token;
 extern char* user_input;
 extern Node* code[100];
 extern LVar* locals[100];
+extern int cur_scope_depth;

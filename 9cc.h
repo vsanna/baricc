@@ -8,17 +8,17 @@
 // tokenize
 // tokenの種類
 typedef enum {
-    TK_RESERVED,  // 記号
-    TK_NUM,       // 整数トークン
+    TK_RESERVED,  // any single character symbol
+    TK_NUM,       // primray integer
     TK_EOF,       // 入力の終わりを表すトークン
-    TK_IDENT,     // 識別子
+    TK_IDENT,     // identification of variable, function
     TK_RETURN,
     TK_IF,
     TK_ELSE,
     TK_WHILE,
     TK_FOR,
-    TK_INT,   // int
-    TK_CHAR,  // char
+    TK_TYPE,  // type annotation
+    TK_SIZEOF,
 } TokenKind;
 
 typedef struct Token Token;
@@ -30,13 +30,22 @@ struct Token {
     int len;  // トークンの長さ(lenを追加するまでは1文字の前提だった)
 };
 
-// ローカル変数のリスト(linkedlist)
+// 型情報. ptr/arrayはその先の型情報も必要なので、それをptr_toとして持つ
+typedef struct Type {
+    enum { INT, PTR, ARRAY } ty;
+    struct Type*
+        ptr_to;  // used when ty == PTR, ARRAY. 指し示す先の変数の型を持つ
+    size_t array_size;
+} Type;
+
+// local variables(LinkedList)
 typedef struct LVar LVar;
 struct LVar {
     LVar* next;
     char* name;
-    int len;  // 名前の長さ
+    int len;  // length of name
     int offset;
+    Type* type;
 };
 
 LVar* find_lvar(Token* tok);
@@ -45,11 +54,14 @@ bool consume(char* op);
 Token* consume_kind(TokenKind kind);
 void expect(char* op);
 int expect_number();
+void advance_token();
+
+void print_token(Token* token);
 bool at_eof();
 Token* new_token(TokenKind kind, Token* cur, char* str, int len);
 bool startswith(char* p, char* q);
 Token* tokenize();
-void register_lval(Token* tok);
+void register_lval(Token* tok, Type* type);
 // codegen
 // 抽象構文木のノードの種類
 typedef enum {
@@ -63,6 +75,7 @@ typedef enum {
     ND_LT,
     ND_LE,
     ND_ASSIGN,
+
     ND_LVAR,  // ローカル変数
     ND_RETURN,
     ND_IF,
@@ -73,6 +86,7 @@ typedef enum {
     ND_FOR_RIGHT,
     ND_BLOCK,
     ND_FUNC_CALL,
+
     ND_FUNC_DEF,
     ND_ADDR,
     ND_DEREF,
@@ -84,11 +98,12 @@ struct Node {
     NodeKind kind;
     Node* lhs;
     Node* rhs;
-    Node** block;    // kind == ND_BLOCKのときのみつかう
-    int val;         // kind == ND_NUMの場合のみ使う
-    int offset;      // ND_LVARの場合のみ使う
-    char* funcname;  // ND_FUNC_CALL, ND_FUNC_DEF で使う
-    Node** args;     // ND_FUNC_DEFのときのみ。
+    Node** block;    // used when kind == ND_BLOCK
+    int val;         // used when kind == ND_NUM
+    int offset;      // used when kind == ND_LVAR
+    char* funcname;  // used when kind == ND_FUNC_CALL, or ND_FUNC_DEF
+    Node** args;     // used when kind == ND_FUNC_DEF
+    Type* type;      // used when kind == ND_LVAR;
 };
 
 Node* new_node(NodeKind kind);
@@ -110,7 +125,7 @@ Node* add();
 Node* mul();
 Node* unary();
 Node* primary();
-Node* define_variable(Token* tok);
+Node* define_variable();
 Node* variable(Token* tok);
 
 // 構文木からアセンブラを作るところまで一気に進める

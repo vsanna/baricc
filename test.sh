@@ -5,10 +5,13 @@ assert() {
     input="$2"
 
     ./9cc "$input" > tmp.s
+
+    # link func.c(put non implemented c feature here)
     cd func
     cc -c func.c
     cd ..
     cc -o tmp tmp.s func/func.o
+
     ./tmp
     actual="$?"
 
@@ -20,9 +23,173 @@ assert() {
     fi
 }
 
+# arary def
+assert 1 "
+int main() {
+    int arr[10];
+    return 1;
+}"
+
+assert 1 "
+int main() {
+    int arr[10][20][30];
+    return 1;
+}"
+
+
+# sizeof
+assert 4 "
+int main() {
+    int x;
+    int *y;
+
+    return sizeof(x);
+}"
+
+assert 8 "
+int main() {
+    int x;
+    int *y;
+
+    return sizeof(y);
+}"
+
+
+assert 4 "
+int main() {
+    int x;
+    int *y;
+
+    return sizeof(x + 3);
+}"
+
+assert 7 "
+int main() {
+    int x;
+    int *y;
+
+    return sizeof x + 3;
+}"
+
+# TODO: y + 3 がptrであることを解釈する
+# assert 8 "
+# int main() {
+#     int x;
+#     int *y;
+
+#     return sizeof(y + 3);
+# }"
+
+# TODO: y + 3 がptrであることを解釈する
+# assert 4 "
+# int main() {
+#     int x;
+#     int *y;
+
+#     return sizeof(*y);
+# }"
+
+assert 4 "
+int main() {
+    int x;
+    int *y;
+
+    return sizeof(1);
+}"
+
+assert 4 "
+int main() {
+    int x;
+    int *y;
+
+    return sizeof(sizeof(1));
+}"
+
+assert 4 "
+int main() {
+    int x;
+    int *y;
+
+    sizeof(x);
+    sizeof(y);
+
+    sizeof(x + 3);
+    sizeof(y + 3);
+    sizeof(*y);
+
+    sizeof(1);
+
+    return sizeof(sizeof(1));
+}"
+
+# pointer calc
+assert 4 "
+int main() {
+    int *p;
+    alloc4(&p, 1, 2, 4, 8);
+    int *q;
+    q = p + 3;
+    q = q - 1;
+    return *q;
+}
+"
+
+assert 4 "
+int main() {
+    int *p;
+    alloc4(&p, 1, 2, 4, 8);
+    int *q;
+    q = p + 2;
+    return *q;
+}
+"
+
+assert 8 "
+int main() {
+    int *p;
+    alloc4(&p, 1, 2, 4, 8);
+    int *q;
+    q = p + 3;
+    return *q;
+}
+"
+
+# assign with pointer
+assert 12 "
+int main() {
+    int x;
+    int* y;
+    y = &x;
+    *y = 12;
+    return x;
+}
+"
+
+assert 11 "
+int main() {
+    int x;
+    int *y;
+    x = 11;
+    y = &x;
+    return *y;
+}"
+
+# type annotation for func
+assert 6 "
+int main() {
+    int x;
+    x = 2;
+    return func(x, 4);
+}
+
+int func(int a, int x) {
+    return a + x;
+}
+"
+
 # type annotation
 assert 2 "
-main() {
+int main() {
     int x;
     x = 2;
     return x;
@@ -30,86 +197,86 @@ main() {
 "
 
 # basic calculation test
-assert 10 'main() { return 10; }'
+assert 10 'int main() { return 10; }'
 
-assert 5 "main() {
+assert 5 "int main() {
     return hoge() + geho();
 }
 
-hoge() {
+int hoge() {
     return 1;
 }
 
-geho() {
+int geho() {
     return 4;
 }
 "
 
 assert 3 "
-main() { return func(1, 2); }
-func(a, b) { return a + b; }
+int main() { return func(1, 2); }
+int func(int a, int b) { return a + b; }
 "
 
 assert 5 "
-main() { return func(1, 2, 3); }
-func(a, b, c) { return b + c; }
+int main() { return func(1, 2, 3); }
+int func(int a, int b, int c) { return b + c; }
 "
 
-assert 55 "main() {
+assert 55 "int main() {
     return total(10);
 }
 
-total(n) {
+int total(int n) {
     if (n < 0) return 0;
     return n + total(n - 1);
 }
 "
 
-assert 55 "main() {
+assert 55 "int main() {
     int a;
     a = 10;
     return total(a);
 }
 
-total(n) {
+int total(int n) {
     if (n < 0) return 0;
     return n + total(n - 1);
 }
 "
 
-assert 42 'main(){ return 42; }'
-assert 21 "main(){ return 5+20-4; }"
-assert 41 "main(){ return  12 + 34 - 5 ; }"
-assert 47 'main(){ return 5+6*7; }'
-assert 15 'main(){ return 5*(9-6); }'
-assert 4 'main(){ return (3+5)/2; }'
-assert 10 'main(){ return -10+20; }'
-assert 10 'main(){ return - -10; }'
-assert 10 'main(){ return - - +10; }'
+assert 42 'int main(){ return 42; }'
+assert 21 "int main(){ return 5+20-4; }"
+assert 41 "int main(){ return  12 + 34 - 5 ; }"
+assert 47 'int main(){ return 5+6*7; }'
+assert 15 'int main(){ return 5*(9-6); }'
+assert 4 'int main(){ return (3+5)/2; }'
+assert 10 'int main(){ return -10+20; }'
+assert 10 'int main(){ return - -10; }'
+assert 10 'int main(){ return - - +10; }'
 
 # # comparison test
-assert 0 'main(){ return 0==1; }'
-assert 1 'main(){ return 42==42      ; }'
-assert 1 'main(){ return 0!=1; }'
-assert 0 'main(){ return 42!=42; }'
+assert 0 'int main(){ return 0==1; }'
+assert 1 'int main(){ return 42==42      ; }'
+assert 1 'int main(){ return 0!=1; }'
+assert 0 'int main(){ return 42!=42; }'
 
-assert 1 'main(){ return 0<1; }'
-assert 0 'main(){ return 1<1; }'
-assert 0 "main(){ return 2<1; }"
-assert 1 'main(){ return 0<=1; }'
-assert 1 'main(){ return 1<=1; }'
-assert 0 'main(){ return 2<=1; }'
+assert 1 'int main(){ return 0<1; }'
+assert 0 'int main(){ return 1<1; }'
+assert 0 "int main(){ return 2<1; }"
+assert 1 'int main(){ return 0<=1; }'
+assert 1 'int main(){ return 1<=1; }'
+assert 0 'int main(){ return 2<=1; }'
 
-assert 1 'main(){ return 1>0; }'
-assert 0 'main(){ return 1>1; }'
-assert 0 'main(){ return 1>2; }'
-assert 1 'main(){ return 1>=0; }'
-assert 1 'main(){ return 1>=1; }'
-assert 0 'main(){ return 1>=2; }'
+assert 1 'int main(){ return 1>0; }'
+assert 0 'int main(){ return 1>1; }'
+assert 0 'int main(){ return 1>2; }'
+assert 1 'int main(){ return 1>=0; }'
+assert 1 'int main(){ return 1>=1; }'
+assert 0 'int main(){ return 1>=2; }'
 
 # variables test
 assert 14 "
-main() {
+int main() {
     int a;
     int b;
     int c;
@@ -120,7 +287,7 @@ main() {
 
 
 assert 6 "
-main() {
+int main() {
     int foo;
     int bar;
     foo = 1;
@@ -131,7 +298,7 @@ main() {
 
 # return test
 assert 6 "
-main() {
+int main() {
     int foo;
     int bar;
 
@@ -142,7 +309,7 @@ main() {
 "
 
 assert 14 "
-main() {
+int main() {
     int a;
     int b;
 
@@ -153,7 +320,7 @@ main() {
 "
 
 assert 8 "
-main() {
+int main() {
     int a;
     return 3 + 5;
     a = 10;
@@ -163,7 +330,7 @@ main() {
 
 # if test
 assert 1 "
-main() {
+int main() {
     int a;
 
     a = 5;
@@ -173,7 +340,7 @@ main() {
 "
 
 assert 10 "
-main() {
+int main() {
     int a;
 
     a = 10;
@@ -183,7 +350,7 @@ main() {
 "
 
 assert 1 "
-main() {
+int main() {
     int a;
 
     a = 10;
@@ -193,7 +360,7 @@ main() {
 "
 
 assert 1 "
-main() {
+int main() {
     int a;
 
     a = 10;
@@ -204,7 +371,7 @@ main() {
 "
 
 assert 2 "
-main() {
+int main() {
     int a;
 
     a = 10;
@@ -216,7 +383,7 @@ main() {
 
 # multi if
 assert 201 "
-main() {
+int main() {
     int a;
     int b;
 
@@ -255,7 +422,7 @@ main() {
 
 # nested if
 assert 210 "
-main() {
+int main() {
     int a;
     int b;
 
@@ -275,7 +442,7 @@ main() {
 "
 
 assert 5 "
-main() {
+int main() {
     int a;
 
     a = 0;
@@ -287,7 +454,7 @@ main() {
 "
 
 assert 11 "
-main() {
+int main() {
     int a;
 
     a = 0;
@@ -299,7 +466,7 @@ main() {
 "
 
 assert 55 "
-main() {
+int main() {
     int a;
 
     a = 0;
@@ -311,7 +478,7 @@ main() {
 "
 
 assert 100 "
-main() {
+int main() {
     int a;
 
     a = 0;
@@ -322,7 +489,7 @@ main() {
 
 # inf loop
 assert 100 "
-main() {
+int main() {
     int a;
 
     a = 0;
@@ -337,7 +504,7 @@ main() {
 
 # block
 assert 100 "
-main() {
+int main() {
     int a;
 
     a = 0;
@@ -351,7 +518,7 @@ main() {
 "
 
 assert 1 "
-main() {
+int main() {
     int a;
     int b;
 
@@ -375,7 +542,7 @@ main() {
 "
 
 assert 2 "
-main() {
+int main() {
     int a;
     int b;
 
@@ -399,7 +566,7 @@ main() {
 "
 
 assert 3 "
-main() {
+int main() {
     int a;
     int b;
 
@@ -423,7 +590,7 @@ main() {
 "
 
 assert 4 "
-main() {
+int main() {
     int a;
     int b;
 
@@ -447,14 +614,14 @@ main() {
 "
 
 # func call
-assert 1 "main(){ return foo(); }"
-assert 17 "main(){ return foo2(10, 7); }"
-assert 16 "main(){ return foo3(10, 7, -1); }"
+assert 1 "int main(){ return foo(); }"
+assert 17 "int main(){ return foo2(10, 7); }"
+assert 16 "int main(){ return foo3(10, 7, -1); }"
 
 
 # pointer, deref
 assert 3 "
-main() {
+int main() {
     int x;
     int y;
 
@@ -469,7 +636,7 @@ main() {
 # 0X08 y 5(any value is fine for this example)
 # 0X00 z 0X08 + 0X8 = 0X10(x's address)
 assert 3 "
-main() {
+int main() {
     int x;
     int y;
     int z;

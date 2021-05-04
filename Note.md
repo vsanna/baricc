@@ -18,6 +18,7 @@ cc -o test2 test2.s
 
 ### debug
 ```bash
+$ ulimit -c unlimited
 $ export SEGFAULT_SIGNALS="all"
 # g optionをコンパイラにつけておく
 $ make test

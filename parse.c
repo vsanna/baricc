@@ -6,12 +6,13 @@ LVar *locals[100];
 int cur_scope_depth = 0;
 
 // util
+
+// for debugging
 void print_token(Token *token) {
-    fprintf(stderr, "token: ");
-    for (int i = 0; i < token->len; i++) {
-        fprintf(stderr, "%c", *(token->str + i));
-    }
-    fprintf(stderr, "\n");
+    char name[10] = {0};
+    memcpy(name, token->str, token->len);
+    fprintf(stderr, "token: %s\n", name);
+    return;
 }
 
 void error(char *fmt, ...) {
@@ -48,7 +49,7 @@ bool consume(char *op) {
         memcmp(token->str, op, token->len)) {
         return false;
     }
-    token = token->next;
+    advance_token();
     return true;
 }
 
@@ -59,7 +60,7 @@ Token *consume_kind(TokenKind kind) {
         return NULL;
     }
     Token *tok = token;
-    token = token->next;
+    advance_token();
     return tok;
 }
 
@@ -70,7 +71,7 @@ void expect(char *op) {
         memcmp(token->str, op, token->len)) {
         error_at(token->str, "'%c'ではありません", op);
     }
-    token = token->next;
+    advance_token();
     return;
 }
 
@@ -81,8 +82,17 @@ int expect_number() {
         error_at(token->str, "数ではありませんん");
     }
     int val = token->val;
-    token = token->next;
+    advance_token();
     return val;
+}
+
+// step forward by 1 token
+void advance_token() {
+    // for debugging
+    // print_token(token);
+
+    token = token->next;
+    return;
 }
 
 bool at_eof() { return token->kind == TK_EOF; }
@@ -126,8 +136,8 @@ typedef struct ReservedWord {
 
 ReservedWord reserved_words[] = {
     {"return", TK_RETURN}, {"if", TK_IF},   {"else", TK_ELSE},
-    {"while", TK_WHILE},   {"for", TK_FOR}, {"int", TK_INT},
-    {"char", TK_CHAR},     {"", TK_EOF},
+    {"while", TK_WHILE},   {"for", TK_FOR}, {"int", TK_TYPE},
+    {"sizeof", TK_SIZEOF}, {"", TK_EOF},
 };
 
 // 入力文字列pをトークない頭してそれを返す
@@ -142,12 +152,12 @@ Token *tokenize() {
     Token *cur = &head;
 
     while (*p) {
-        // print_token(cur);
-
         if (isspace(*p)) {
             p++;
             continue;
         }
+
+        // print_token(cur);
 
         // identの前に処理する
         // returnがきてなおかつnの次がtokenを構成する文字列ではない
@@ -169,36 +179,6 @@ Token *tokenize() {
             continue;
         }
 
-        // if (startswith(p, "return") && !is_alnum(p[6])) {
-        //     cur = new_token(TK_RETURN, cur, p, 6);
-        //     p += 6;
-        //     continue;
-        // }
-
-        // if (startswith(p, "if") && !is_alnum(p[2])) {
-        //     cur = new_token(TK_IF, cur, p, 2);
-        //     p += 2;
-        //     continue;
-        // }
-
-        // if (startswith(p, "else") && !is_alnum(p[4])) {
-        //     cur = new_token(TK_ELSE, cur, p, 4);
-        //     p += 4;
-        //     continue;
-        // }
-
-        // if (startswith(p, "while") && !is_alnum(p[5])) {
-        //     cur = new_token(TK_WHILE, cur, p, 5);
-        //     p += 5;
-        //     continue;
-        // }
-
-        // if (startswith(p, "for") && !is_alnum(p[3])) {
-        //     cur = new_token(TK_FOR, cur, p, 3);
-        //     p += 3;
-        //     continue;
-        // }
-
         if (startswith(p, "==") || startswith(p, "!=") || startswith(p, "<=") ||
             startswith(p, ">=")) {
             cur = new_token(TK_RESERVED, cur, p, 2);
@@ -206,7 +186,7 @@ Token *tokenize() {
             continue;
         }
 
-        if (strchr("+-*/()<>;={},&", *p)) {
+        if (strchr("+-*/()<>;={},&[]", *p)) {
             cur = new_token(TK_RESERVED, cur, p, 1);
             p++;
             continue;

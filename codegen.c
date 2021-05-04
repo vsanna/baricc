@@ -26,7 +26,7 @@ Node* new_num(int val) {
 // TODO: 100行まで対応
 Node* code[100];
 
-// program = ident "(" ")" block
+// program = func_def*
 // programをまずは関数の束とする
 void program() {
     int i = 0;
@@ -37,41 +37,49 @@ void program() {
     code[i] = NULL;
 }
 
-// func_def = ident "(" (ident ",")* ")" block
+// func_def = "int" ident "(" ("int" ident ("," "int" ident)*)? ")" block
 Node* func_def() {
     // TODO: 本当? 呼び出しごとでは?
     cur_scope_depth++;
 
+    // read type annotation of return value
+    if (!consume_kind(TK_TYPE)) {
+        error("type annotation of func is needed");
+    }
+
+    // function name
     Node* node = NULL;
     Token* tok = consume_kind(TK_IDENT);
-    if (tok) {
-        node = new_node(ND_FUNC_DEF);
-        node->funcname = calloc(100, sizeof(char));
-        memcpy(node->funcname, tok->str, tok->len);
-        node->args = calloc(10, sizeof(char*));
-        node->block = calloc(100, sizeof(Node));
-
-        expect("(");
-        // ここは関数定義なので引数の名称のみ保持
-        for (int i = 0; !consume(")"); i++) {
-            if (i != 0) {
-                expect(",");
-            }
-
-            Token* tok = consume_kind(TK_IDENT);
-            if (tok) {
-                // node->args[i] = calloc(100, sizeof(char));
-                // memcpy(node->args[i], tok->str, tok->len);
-                Node* variable_node = define_variable(tok);
-                node->args[i] = variable_node;
-            } else {
-                break;
-            }
-        }
-        node->lhs = block();
-    } else {
+    if (tok == NULL) {
         error("here function must come");
     }
+
+    node = new_node(ND_FUNC_DEF);
+    node->funcname = calloc(100, sizeof(char));
+    memcpy(node->funcname, tok->str, tok->len);
+    node->args = calloc(10, sizeof(char*));
+    node->block = calloc(100, sizeof(Node));
+
+    // function args
+    expect("(");
+    for (int i = 0; !consume(")"); i++) {
+        if (i != 0) {
+            expect(",");
+        }
+
+        if (consume_kind(TK_TYPE)) {
+            Node* variable_node = define_variable();
+            node->args[i] = variable_node;
+        } else {
+            char* name[100] = {0};
+            memcpy(name, token->str, token->len);
+            error("invalid token comes here. %d", name);
+        }
+    }
+
+    // function body
+    node->lhs = block();
+
     return node;
 }
 
@@ -81,7 +89,8 @@ Node* func_def() {
 //        | "while" "(" expr ")" stmt
 //        | "for" "(" expr? ";" expr? ";" expr? ")" stmt
 //        | block
-//        | "int" ident ";""
+//        | define_variable ";" TODO:
+//        consume_kindココでしてるからそれもdefineにもってく
 Node* stmt() {
     Node* node;
 
@@ -155,12 +164,10 @@ Node* stmt() {
         return node;
     }
 
-    if (consume_kind(TK_INT)) {
-        Token* tok = consume_kind(TK_IDENT);
-        if (tok) {
-            expect(";");
-            return define_variable(tok);
-        }
+    if (consume_kind(TK_TYPE)) {
+        Node* node = define_variable();
+        expect(";");
+        return node;
     }
 
     Node* block_node = block();
@@ -244,9 +251,23 @@ Node* add() {
 
     for (;;) {
         if (consume("+")) {
-            node = new_binary(ND_ADD, node, mul());
+            if (node->type != NULL && node->type->ty == PTR) {
+                // pointer calc
+                int n = node->type->ptr_to->ty == INT ? 4 : 8;
+                node = new_binary(ND_ADD, node,
+                                  new_binary(ND_MUL, mul(), new_num(n)));
+            } else {
+                node = new_binary(ND_ADD, node, mul());
+            }
         } else if (consume("-")) {
-            node = new_binary(ND_SUB, node, mul());
+            if (node->type != NULL && node->type->ty == PTR) {
+                // pointer calc
+                int n = node->type->ptr_to->ty == INT ? 4 : 8;
+                node = new_binary(ND_SUB, node,
+                                  new_binary(ND_MUL, mul(), new_num(n)));
+            } else {
+                node = new_binary(ND_SUB, node, mul());
+            }
         } else {
             return node;
         }
@@ -267,7 +288,7 @@ Node* mul() {
     }
 }
 
-// unary = ("+"" | "-" | "*" | "&")? unary | primary
+// unary = ("sizeof" | "+"" | "-" | "*" | "&")? unary | primary
 Node* unary() {
     if (consume("+")) {
         return unary();
@@ -280,6 +301,14 @@ Node* unary() {
     }
     if (consume("&")) {
         return new_binary(ND_ADDR, unary(), NULL);
+    }
+    if (consume_kind(TK_SIZEOF)) {
+        Node* node = unary();
+        // NOTE: 今ptr/intの２つしか肩がない。
+        // TODO: nodeから木をたどって変数を探す
+        // *(DEREF)があれば、変数を位置段階derefする必要がある
+        int size = node->type && node->type->ty == PTR ? 8 : 4;
+        return new_num(size);
     }
 
     return primary();
@@ -330,7 +359,50 @@ Node* primary() {
 // TODO: scopeが異なる変数が見つかった場合はエラーではないが,
 // 同一scopeで見つかったらエラーみたいなことをするにはまたロジックを考える必要がある
 // TODO: block切って同名/別型変数を宣言したときに既存言語でエラーになるかどうか
-Node* define_variable(Token* tok) {
+// NOTE: 型宣言の最初にいる状態で呼ばれる. *とidentの処理を行う
+// define_variable = "int" "*"* ident
+//                   | "int" "*"* ident "[" number "]"
+Node* define_variable() {
+    Type* type;
+    type = calloc(1, sizeof(Type));
+    type->ty = INT;  // default INT
+    type->ptr_to = NULL;
+
+    // compilerのC上でptrのlinedlistを持つ
+    // TODO: このあと変数定義時にこのchainも考慮?
+    while (consume("*")) {
+        Type* t = calloc(1, sizeof(Type));
+        t->ty = PTR;
+        t->ptr_to = type;
+        type = t;
+    }
+
+    Token* tok = consume_kind(TK_IDENT);
+    if (tok == NULL) {
+        error("invalid definition of variable.");
+    }
+
+    int size = type->ty == PTR ? 8 : 4;
+
+    // NOTE: sizeは8の倍数でないとだめ(1word8bitだからだと思われる)
+    while ((size % 8) != 0) {
+        size += 4;
+    }
+
+    // check if it's array or not;
+    while (consume("[")) {
+        Type* t;
+        t = calloc(1, sizeof(Type));
+        t->ty = ARRAY;
+        t->ptr_to = type;
+        t->array_size = expect_number();
+
+        type = t;
+        size *= t->array_size;
+        expect("]");
+        fprintf(stderr, "arary size: %ld\n", type->array_size);
+    }
+
     Node* node = new_node(ND_LVAR);
     LVar* lvar = find_lvar(tok);
     if (lvar) {
@@ -339,9 +411,22 @@ Node* define_variable(Token* tok) {
         error("redefining variable %s", name);
     }
 
-    // 新規変数であればlvarを追加する
-    register_lval(tok);
+    // 新規変数なのでlvarを追加する
+    lvar = calloc(1, sizeof(LVar));
+    lvar->next = locals[cur_scope_depth];
+    lvar->name = tok->str;
+    lvar->len = tok->len;
+    lvar->type = type;
+
+    if (locals[cur_scope_depth] == NULL) {
+        lvar->offset = size;
+    } else {
+        lvar->offset = locals[cur_scope_depth]->offset + size;
+    }
+    locals[cur_scope_depth] = lvar;
+
     node->offset = locals[cur_scope_depth]->offset;
+    node->type = type;
     return node;
 }
 
@@ -359,22 +444,8 @@ Node* variable(Token* tok) {
 
     // すでに宣言済みの変数であればそのoffsetを使う
     node->offset = lvar->offset;
+    node->type = lvar->type;
     return node;
-}
-
-// 受け取ったTK_IDENTのtokenをLVarとして登録
-void register_lval(Token* tok) {
-    LVar* lvar = calloc(1, sizeof(LVar));
-    lvar->next = locals[cur_scope_depth];
-    lvar->name = tok->str;
-    lvar->len = tok->len;
-
-    if (locals[cur_scope_depth] == NULL) {
-        lvar->offset = 8;
-    } else {
-        lvar->offset = locals[cur_scope_depth]->offset + 8;
-    }
-    locals[cur_scope_depth] = lvar;
 }
 
 char* argregs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
@@ -579,10 +650,13 @@ void gen(Node* node) {
                 num_args++;
             }
             // 引数の数を覗いた変数の数文rspを"さらに"ずらして、変数領域を確保する
-            // この関数のためだけのlocals領域を確保するようなイメージ
+            // この関数のためだけのlocals領域をstack先頭に確保するようなイメージ
             // TODO: えー、本当? 理論と実践ではどうしてたっけ
+            // TODO:
+            // 昔のcはローカル変数を先頭に宣言していた、みたいな話と関係あるのか...
             if (locals[cur_scope_depth]) {
                 int offset = locals[cur_scope_depth]->offset;
+                fprintf(stderr, "OFFSET: %d\n", offset);
                 offset -= num_args * 8;
                 printf("  sub rsp, %d\n", offset);
             }
@@ -605,6 +679,16 @@ void gen(Node* node) {
             /*
             [アドレスの値]をpushした上で、それから値をとってきてpushし直す
             ND_LVARとほぼ同じ処理
+
+            ref: ND_LVARのgen
+            // 左辺値のアドレスをスタックの先頭にpushし、
+            gen_lval(node);
+            // そのアドレスをraxにいれ
+            printf("  pop rax\n");
+            // そのアドレスにある値をraxにいれ、
+            printf("  mov rax, [rax]\n");
+            // その値をスタックの先頭にpush
+            printf("  push rax\n");
             */
             gen(node->lhs);
             printf("  pop rax\n");
@@ -673,9 +757,17 @@ void gen(Node* node) {
 }
 
 /*
-odeが左辺値なら、その変数の「アドレス」をstackにpushする
+左辺値として扱う = そのnodeの「アドレス」をstackにpushする
 */
 void gen_lval(Node* node) {
+    // ND_DEREFのときは右辺値扱いして「値」をstackにpushする
+    if (node->kind == ND_DEREF) {
+        // TODO: ->lhs を除外しても動いてしまう. なぜ
+        gen(node->lhs);
+        return;
+    }
+
+    // ND_LVARがくるとき
     if (node->kind != ND_LVAR) {
         error("代入の左辺値が変数ではありません");
     }

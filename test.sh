@@ -23,6 +23,15 @@ assert() {
     fi
 }
 
+# global variables
+assert 1 "
+int a;
+int b[10];
+
+int main() {
+    return 1;
+}"
+
 # array access
 
 # TODO: 二重配列動かない(変数の型を無視しているからな気がする)

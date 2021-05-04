@@ -254,7 +254,7 @@ Node* add() {
 
     for (;;) {
         if (consume("+")) {
-            if (node->type != NULL && node->type->ty == PTR) {
+            if (node->type != NULL && node->type->ty != INT) {
                 // pointer calc
                 int n = node->type->ptr_to->ty == INT ? 4 : 8;
                 node = new_binary(ND_ADD, node,
@@ -263,7 +263,7 @@ Node* add() {
                 node = new_binary(ND_ADD, node, mul());
             }
         } else if (consume("-")) {
-            if (node->type != NULL && node->type->ty == PTR) {
+            if (node->type != NULL && node->type->ty != INT) {
                 // pointer calc
                 int n = node->type->ptr_to->ty == INT ? 4 : 8;
                 node = new_binary(ND_SUB, node,
@@ -300,17 +300,24 @@ Node* unary() {
         return new_binary(ND_SUB, new_num(0), unary());
     }
     if (consume("*")) {
+        // TODO: unaryの部分はpointer型でなかったらエラーにするべき
         return new_binary(ND_DEREF, unary(), NULL);
     }
     if (consume("&")) {
         return new_binary(ND_ADDR, unary(), NULL);
     }
+
+    // sizeof x: xのサイズを返す.
     if (consume_kind(TK_SIZEOF)) {
+        // "sizeof" unaryにおけるunaryの末尾までtokenをすすめる
         Node* node = unary();
-        // NOTE: 今ptr/intの２つしか肩がない。
-        // TODO: nodeから木をたどって変数を探す
-        // *(DEREF)があれば、変数を位置段階derefする必要がある
-        int size = node->type && node->type->ty == PTR ? 8 : 4;
+        int size;
+        if (node->kind == ND_NUM) {
+            size = 4;
+        } else {
+            Type* t = get_type(node);
+            size = get_type_size(t);
+        }
         return new_num(size);
     }
 
@@ -357,7 +364,8 @@ Node* primary() {
     return new_num(expect_number());
 }
 
-// 変数ノードの宣言用. lvarが見つかったらエラーを返すためのもの。
+// stmtの一つ. 変数を宣言する.
+// ND_LVARを返しつつ、LVarを作ってlocalsに追加する
 // TODO: これは意味解析も一緒にやっちゃってないか? それはいいの?
 // TODO: scopeが異なる変数が見つかった場合はエラーではないが,
 // 同一scopeで見つかったらエラーみたいなことをするにはまたロジックを考える必要がある
@@ -385,7 +393,7 @@ Node* define_variable() {
         error("invalid definition of variable.");
     }
 
-    int size = type->ty == PTR ? 8 : 4;
+    int size = get_type_size(type);
 
     // NOTE: sizeは8の倍数でないとだめ(1word8bitだからだと思われる)
     while ((size % 8) != 0) {
@@ -448,5 +456,55 @@ Node* variable(Token* tok) {
     // すでに宣言済みの変数であればそのoffsetを使う
     node->offset = lvar->offset;
     node->type = lvar->type;
+
+    while (consume("[")) {
+        // a[3] は *(a + 3) にする
+        Node* add = new_node(ND_ADD);
+        add->lhs = node;
+        add->rhs = expr();
+        node = new_node(ND_DEREF);
+        node->lhs = add;
+        // TODO: node(ND_LVAR)のtypeが配列のままなのにptrになっちゃってない?
+        expect("]");
+    }
+
     return node;
+}
+
+// TODO: *(a + 1) * b の場合、bはint, aはptrだと、なんの型がかえる?
+// 型を探す.
+Type* get_type(Node* node) {
+    if (node == NULL) {
+        return NULL;
+    }
+
+    if (node->type) {
+        return node->type;
+    }
+
+    // 先に左見て、なければ右みる
+    Type* t = get_type(node->lhs);
+    if (!t) {
+        t = get_type(node->rhs);
+    }
+
+    // DEREFの場合はとってきたtypeの指す先を返す(型のderef)
+    if (t && node->kind == ND_DEREF) {
+        t = t->ptr_to;
+        if (t == NULL) {
+            error("invalid dereference");
+        }
+        return t;
+    }
+    return t;
+}
+
+// 渡ってきたtypeのサイズを返す.
+// INT -> 4
+// PTR -> 8
+int get_type_size(Type* type) {
+    if (type == NULL) {
+        error("type should be non null");
+    }
+    return type && type->ty == PTR ? 8 : 4;
 }

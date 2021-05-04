@@ -18,8 +18,19 @@ void gen(Node* node) {
             printf("  push %d\n", node->val);
             return;
         case ND_LVAR:
+            // 変数の評価 = 「値」をスタックにpush
+
             // 左辺値のアドレスをスタックの先頭にpushし、
             gen_lval(node);
+
+            // TODO: わからぬ.
+            // arrayの場合はaddressを入れたままで終わってOK
+            // arrayはpointerのようにあつかうため.(DEREFと似たことをしている)
+            Type* type = get_type(node);
+            if (type && type->ty == ARRAY) {
+                return;
+            }
+
             // そのアドレスをraxにいれ
             printf("  pop rax\n");
             // そのアドレスにある値をraxにいれ、

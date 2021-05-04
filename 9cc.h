@@ -129,6 +129,9 @@ Node* primary();
 Node* define_variable();
 Node* variable(Token* tok);
 
+Type* get_type(Node* node);
+int get_type_size(Type* type);
+
 // 構文木からアセンブラを作るところまで一気に進める
 void gen(Node* node);
 void gen_lval(Node* node);

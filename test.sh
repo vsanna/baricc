@@ -25,8 +25,33 @@ assert() {
 }
 
 # char
+assert 3 "
+main() {
+    char x[3];
+    x[0] = -1;
+    x[3] = 2;
+    int y;
+    y = 4;
+    return x[0] + y;
+}"
 
-# # global variables
+exit
+
+# global variables
+assert 10 "
+int a;
+int b[10];
+
+int main() {
+    a = 1;
+    b[0] = 2;
+    b[3] = 3;
+    int c;
+    c = 4;
+    return a + b[0] + b[3] + c;
+}"
+
+# TODO:*(b + 3)が動かない
 # assert 10 "
 # int a;
 # int b[10];
@@ -37,203 +62,189 @@ assert() {
 #     b[3] = 3;
 #     int c;
 #     c = 4;
-#     return a + b[0] + b[3] + c;
+#     return a + *b + *(b + 3) + c;
 # }"
 
-# # TODO:*(b + 3)が動かない
-# # assert 10 "
-# # int a;
-# # int b[10];
+# array access
 
-# # int main() {
-# #     a = 1;
-# #     b[0] = 2;
-# #     b[3] = 3;
-# #     int c;
-# #     c = 4;
-# #     return a + *b + *(b + 3) + c;
-# # }"
-
-# # array access
-
-# # TODO: 二重配列動かない(変数の型を無視しているからな気がする)
-# # assert 3 "
-# # int main() {
-# #     int a[2][3];
-# #     a[0][2] = 1;
-# #     a[1][3] = 2;
-# #     int *p;
-# #     p = a;
-# #     return p[0][2] + p[1][3];
-# # }"
-
+# TODO: 二重配列動かない(変数の型を無視しているからな気がする)
 # assert 3 "
 # int main() {
-#     int a[2];
-#     a[0] = 1;
-#     a[1] = 2;
+#     int a[2][3];
+#     a[0][2] = 1;
+#     a[1][3] = 2;
 #     int *p;
 #     p = a;
-#     return p[0] + p[1];
+#     return p[0][2] + p[1][3];
 # }"
 
-# # array calc
-# assert 3 "
-# int main() {
-#     int a[2];
-#     *a = 1;
-#     *(a + 1) = 2;
-#     int *p;
-#     p = a;
-#     return *p + *(p + 1);
-# }"
+assert 3 "
+int main() {
+    int a[2];
+    a[0] = 1;
+    a[1] = 2;
+    int *p;
+    p = a;
+    return p[0] + p[1];
+}"
 
-# # arary def
-# assert 1 "
-# int main() {
-#     int arr[10];
-#     return 1;
-# }"
+# array calc
+assert 3 "
+int main() {
+    int a[2];
+    *a = 1;
+    *(a + 1) = 2;
+    int *p;
+    p = a;
+    return *p + *(p + 1);
+}"
 
-# assert 1 "
-# int main() {
-#     int arr[10][20][30];
-#     return 1;
-# }"
+# arary def
+assert 1 "
+int main() {
+    int arr[10];
+    return 1;
+}"
 
-
-# # sizeof
-# assert 4 "
-# int main() {
-#     int x;
-#     int *y;
-
-#     return sizeof(x);
-# }"
-
-# assert 8 "
-# int main() {
-#     int x;
-#     int *y;
-
-#     return sizeof(y);
-# }"
+assert 1 "
+int main() {
+    int arr[10][20][30];
+    return 1;
+}"
 
 
-# assert 4 "
-# int main() {
-#     int x;
-#     int *y;
+# sizeof
+assert 4 "
+int main() {
+    int x;
+    int *y;
 
-#     return sizeof(x + 3);
-# }"
+    return sizeof(x);
+}"
 
-# assert 7 "
-# int main() {
-#     int x;
-#     int *y;
+assert 8 "
+int main() {
+    int x;
+    int *y;
 
-#     return sizeof x + 3;
-# }"
+    return sizeof(y);
+}"
 
-# # TODO: y + 3 がptrであることを解釈する
-# assert 8 "
-# int main() {
-#     int x;
-#     int *y;
 
-#     return sizeof(y + 3);
-# }"
+assert 4 "
+int main() {
+    int x;
+    int *y;
 
-# # TODO: y + 3 がptrであることを解釈する
-# assert 4 "
-# int main() {
-#     int *y;
+    return sizeof(x + 3);
+}"
 
-#     return sizeof(*y);
-# }"
+assert 7 "
+int main() {
+    int x;
+    int *y;
 
-# assert 4 "
-# int main() {
-#     return sizeof(1);
-# }"
+    return sizeof x + 3;
+}"
 
-# assert 4 "
-# int main() {
-#     int x;
-#     int *y;
+# TODO: y + 3 がptrであることを解釈する
+assert 8 "
+int main() {
+    int x;
+    int *y;
 
-#     return sizeof(sizeof(1));
-# }"
+    return sizeof(y + 3);
+}"
 
-# assert 4 "
-# int main() {
-#     int x;
-#     int *y;
+# TODO: y + 3 がptrであることを解釈する
+assert 4 "
+int main() {
+    int *y;
 
-#     sizeof(x);
-#     sizeof(y);
+    return sizeof(*y);
+}"
 
-#     sizeof(x + 3);
-#     sizeof(y + 3);
-#     sizeof(*y);
+assert 4 "
+int main() {
+    return sizeof(1);
+}"
 
-#     sizeof(1);
+assert 4 "
+int main() {
+    int x;
+    int *y;
 
-#     return sizeof(sizeof(1));
-# }"
+    return sizeof(sizeof(1));
+}"
 
-# # pointer calc
-# assert 4 "
-# int main() {
-#     int *p;
-#     alloc4(&p, 1, 2, 4, 8);
-#     int *q;
-#     q = p + 3;
-#     q = q - 1;
-#     return *q;
-# }
-# "
+assert 4 "
+int main() {
+    int x;
+    int *y;
 
-# assert 4 "
-# int main() {
-#     int *p;
-#     alloc4(&p, 1, 2, 4, 8);
-#     int *q;
-#     q = p + 2;
-#     return *q;
-# }
-# "
+    sizeof(x);
+    sizeof(y);
 
-# assert 8 "
-# int main() {
-#     int *p;
-#     alloc4(&p, 1, 2, 4, 8);
-#     int *q;
-#     q = p + 3;
-#     return *q;
-# }
-# "
+    sizeof(x + 3);
+    sizeof(y + 3);
+    sizeof(*y);
 
-# # assign with pointer
-# assert 12 "
-# int main() {
-#     int x;
-#     int* y;
-#     y = &x;
-#     *y = 12;
-#     return x;
-# }
-# "
+    sizeof(1);
 
-# assert 11 "
-# int main() {
-#     int x;
-#     int *y;
-#     x = 11;
-#     y = &x;
-#     return *y;
-# }"
+    return sizeof(sizeof(1));
+}"
+
+# pointer calc
+assert 4 "
+int main() {
+    int *p;
+    alloc4(&p, 1, 2, 4, 8);
+    int *q;
+    q = p + 3;
+    q = q - 1;
+    return *q;
+}
+"
+
+assert 4 "
+int main() {
+    int *p;
+    alloc4(&p, 1, 2, 4, 8);
+    int *q;
+    q = p + 2;
+    return *q;
+}
+"
+
+assert 8 "
+int main() {
+    int *p;
+    alloc4(&p, 1, 2, 4, 8);
+    int *q;
+    q = p + 3;
+    return *q;
+}
+"
+
+# assign with pointer
+assert 12 "
+int main() {
+    int x;
+    int* y;
+    y = &x;
+    *y = 12;
+    return x;
+}
+"
+
+assert 11 "
+int main() {
+    int x;
+    int *y;
+    x = 11;
+    y = &x;
+    return *y;
+}"
 
 # type annotation for func
 assert 6 "

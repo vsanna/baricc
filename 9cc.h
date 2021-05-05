@@ -47,10 +47,19 @@ struct LVar {
     int len;  // length of name
     int offset;
     Type* type;
+    enum { LOCAL, GLOBAL } kind;
 };
 
-LVar* find_lvar(Token* tok);
+LVar* find_variable(Token* tok);
 
+// read_define用
+typedef struct Define Define;
+struct Define {
+    Token* ident;
+    Type* type;
+};
+
+Define* read_define();
 bool consume(char* op);
 Token* consume_kind(TokenKind kind);
 void expect(char* op);
@@ -77,7 +86,9 @@ typedef enum {
     ND_LE,
     ND_ASSIGN,
 
-    ND_LVAR,  // ローカル変数
+    ND_LVAR,      // ローカル変数
+    ND_GVAR_DEF,  // グローバル変数の定義
+    ND_GVAR,      // グローバル変数の利用
     ND_RETURN,
     ND_IF,
     ND_ELSE,
@@ -104,7 +115,9 @@ struct Node {
     int offset;      // used when kind == ND_LVAR
     char* funcname;  // used when kind == ND_FUNC_CALL, or ND_FUNC_DEF
     Node** args;     // used when kind == ND_FUNC_DEF
-    Type* type;      // used when kind == ND_LVAR;
+    Type* type;      // used when kind == ND_LVAR
+    char* varname;   // used when kind == ND_GVAR, ND_LVAR
+    int varsize;     // used when kind == ND_GVAR, ND_LVAR
 };
 
 Node* new_node(NodeKind kind);
@@ -116,7 +129,7 @@ Node* new_num(int val);
 void program();
 Node* stmt();
 Node* block();
-Node* func_def();
+Node* func_def(Define* def);
 Node* expr();
 Node* assign();
 Node* expr();
@@ -126,15 +139,17 @@ Node* add();
 Node* mul();
 Node* unary();
 Node* primary();
-Node* define_variable();
+Node* define_variable(Define* def, LVar** varlist);
 Node* variable(Token* tok);
 
 Type* get_type(Node* node);
 int get_type_size(Type* type);
+Define* read_define_head();
+Type* type_annotation();
 
 // 構文木からアセンブラを作るところまで一気に進める
 void gen(Node* node);
-void gen_lval(Node* node);
+void gen_val(Node* node);
 
 // util
 void print_token(Token* token);
@@ -145,5 +160,7 @@ void error(char* fmt, ...);
 extern Token* token;
 extern char* user_input;
 extern Node* code[100];
+// TODO: localsはメモリにはどうマッピングされるんだっけ. offsetの計算するだけ?
 extern LVar* locals[100];
 extern int cur_scope_depth;
+extern LVar* globals[100];

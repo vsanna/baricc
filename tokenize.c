@@ -10,7 +10,7 @@ LVar *locals[100];
 void print_token(Token *token) {
     char name[10] = {0};
     memcpy(name, token->str, token->len);
-    fprintf(stderr, "token: %s\n", name);
+    fprintf(stderr, "[DEBUG] token: %s\n", name);
     return;
 }
 
@@ -29,12 +29,15 @@ void error_at(char *loc, char *fmt, ...) {
     // 今読んでいるaddress - user_inputの先頭のaddress = pos
     int pos = loc - user_input;
 
-    fprintf(stderr, "%s\n", user_input);
-    fprintf(stderr, "%*s", pos,
-            " ");  // pos個分の空白を出力(入力が1行であることを想定)
-    fprintf(stderr, "^ ");
+    // エラーのあった箇所から20文字
+    char *tmp[100] = {0};
+    memcpy(tmp, user_input + pos, 30);
+    fprintf(stderr, "=========\n");
+    fprintf(stderr, "%s\n", tmp);
+    fprintf(stderr, "---------\n");
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\n");
+    fprintf(stderr, "=========\n");
 
     exit(1);
 }
@@ -68,7 +71,9 @@ Token *consume_kind(TokenKind kind) {
 void expect(char *op) {
     if (token->kind != TK_RESERVED || strlen(op) != token->len ||
         memcmp(token->str, op, token->len)) {
-        error_at(token->str, "'%c'ではありません", op);
+        char *tmp[100] = {0};
+        memcpy(tmp, token->str, token->len);
+        error_at(token->str, "expected: '%c'\nactual: '%s'\n", *op, tmp);
     }
     advance_token();
     return;
@@ -111,17 +116,6 @@ Token *new_token(TokenKind kind, Token *cur, char *str, int len) {
 }
 
 bool startswith(char *p, char *q) { return memcmp(p, q, strlen(q)) == 0; }
-
-// local変数を探してあればそれを返す。なければNULLを返す
-LVar *find_lvar(Token *tok) {
-    for (LVar *var = locals[cur_scope_depth]; var; var = var->next) {
-        // NOTE: memcmpは一致していたら0を返す
-        if (var->len == tok->len && !memcmp(tok->str, var->name, var->len)) {
-            return var;
-        }
-    }
-    return NULL;
-}
 
 bool is_alnum(char p) {
     return ('a' <= p && p <= 'z') || ('A' <= p && p <= 'Z') ||

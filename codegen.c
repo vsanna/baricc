@@ -12,21 +12,28 @@ int if_id = 0;
 void gen(Node* node) {
     int id = if_id;
     int num_args = 0;
+    Type* type;
 
     switch (node->kind) {
         case ND_NUM:
             printf("  push %d\n", node->val);
             return;
+        case ND_GVAR_DEF:
+            // TODO: 意味調べる. staticな場所からどれだけの場所を確保するか?
+            printf("%s:\n", node->varname);
+            printf("  .zero %d\n", node->varsize);
+            return;
+        case ND_GVAR:
         case ND_LVAR:
             // 変数の評価 = 「値」をスタックにpush
 
             // 左辺値のアドレスをスタックの先頭にpushし、
-            gen_lval(node);
+            gen_val(node);
 
             // TODO: わからぬ.
             // arrayの場合はaddressを入れたままで終わってOK
             // arrayはpointerのようにあつかうため.(DEREFと似たことをしている)
-            Type* type = get_type(node);
+            type = get_type(node);
             if (type && type->ty == ARRAY) {
                 return;
             }
@@ -40,7 +47,7 @@ void gen(Node* node) {
             return;
         case ND_ASSIGN:
             // 左辺の左辺値のアドレスをstackにpush
-            gen_lval(node->lhs);
+            gen_val(node->lhs);
             // 右辺を計算した値をstackにpush
             gen(node->rhs);
             // rdiに計算結果をpopしてrdiにいれる
@@ -238,7 +245,7 @@ void gen(Node* node) {
             return;
         case ND_ADDR:
             /* [&の次に来る変数のアドレス]をpushする */
-            gen_lval(node->lhs);
+            gen_val(node->lhs);
             return;
         case ND_DEREF:
             /*
@@ -247,7 +254,7 @@ void gen(Node* node) {
 
             ref: ND_LVARのgen
             // 左辺値のアドレスをスタックの先頭にpushし、
-            gen_lval(node);
+            gen_val(node);
             // そのアドレスをraxにいれ
             printf("  pop rax\n");
             // そのアドレスにある値をraxにいれ、
@@ -324,7 +331,7 @@ void gen(Node* node) {
 /*
 左辺値として扱う = そのnodeの「アドレス」をstackにpushする
 */
-void gen_lval(Node* node) {
+void gen_val(Node* node) {
     // ND_DEREFのときは右辺値扱いして「値」をstackにpushする
     if (node->kind == ND_DEREF) {
         // TODO: ->lhs を除外しても動いてしまう. なぜ
@@ -332,12 +339,13 @@ void gen_lval(Node* node) {
         return;
     }
 
-    // ND_LVARがくるとき
-    if (node->kind != ND_LVAR) {
-        error("代入の左辺値が変数ではありません");
+    if (node->kind == ND_LVAR) {
+        printf("  mov rax, rbp\n");
+        printf("  sub rax, %d\n", node->offset);
+        printf("  push rax\n");
+    } else if (node->kind == ND_GVAR) {
+        printf("  push offset %s\n", node->varname);
+    } else {
+        error("not variable");
     }
-
-    printf("  mov rax, rbp\n");
-    printf("  sub rax, %d\n", node->offset);
-    printf("  push rax\n");
 }

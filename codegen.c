@@ -1,6 +1,7 @@
 #include "9cc.h"
 LVar* locals[];
 int cur_scope_depth;
+StringToken* strings;
 
 // char* argregs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 // サイズ(byte)ごとのレジスタのset
@@ -20,6 +21,10 @@ void gen(Node* node) {
     Type* type;
 
     switch (node->kind) {
+        case ND_STRING:
+            // TODO: push offsetを調べる
+            printf("  push offset .LC%d\n", node->string->index);
+            return;
         case ND_NUM:
             printf("  push %d\n", node->val);
             return;
@@ -243,14 +248,16 @@ void gen(Node* node) {
             printf("  mov rax, rsp\n");
             printf("  and rax, 15\n");
             printf("  jnz .L.call.%03d\n", id);
-            printf("  mov rax, 0\n");
+            printf("  mov rax, 0\n");  // ALを0クリアして可変長引数に対応する.
+                                       // TODO: なにそれ
             printf("  call %s\n", node->funcname);
             printf("  jmp .L.end.%03d\n", id);
             printf(".L.call.%03d:\n", id);
             printf(
                 "  sub rsp, 8\n");  // TODO:
                                     // rspの値が16の倍数でないとき、8をひけばいいだけ?
-            printf("  mov rax, 0\n");  // ALに0を入れる。
+            printf("  mov rax, 0\n");  // ALを0クリアして可変長引数に対応する.
+                                       // TODO: なにそれ
             printf("  call %s\n", node->funcname);
             printf("  add rsp, 8\n");
             printf(".L.end.%03d:\n", id);

@@ -5,6 +5,7 @@ char* user_input;
 LVar* locals[100];
 LVar* globals[100];  // TODO: 配列でなくてよい
 int cur_scope_depth = 0;
+StringToken* strings;
 
 /**************************
  * node builder
@@ -26,6 +27,13 @@ Node* new_binary(NodeKind kind, Node* lhs, Node* rhs) {
 Node* new_num(int val) {
     Node* node = new_node(ND_NUM);
     node->val = val;
+    return node;
+}
+
+// ND_STRINGのnodeを返す
+Node* new_string(StringToken* str) {
+    Node* node = new_node(ND_STRING);
+    node->string = str;
     return node;
 }
 
@@ -343,6 +351,8 @@ Node* unary() {
 // primary = num
 //           | ident ("(" (expr ",")* ")")?
 //           | "(" expr ")"
+//           | '""string'"'
+//           | number
 Node* primary() {
     // 次のトークンが ( なら ( expr ) のハズ
     if (consume("(")) {
@@ -374,6 +384,23 @@ Node* primary() {
 
         // 変数呼び出しの場合
         return variable(tok);
+    }
+
+    // string
+    if (tok = consume_kind(TK_STRING)) {
+        // TODO: builder 関数を整理したい
+        StringToken* s = calloc(1, sizeof(StringToken));
+        s->value = calloc(100, sizeof(char));
+        memcpy(s->value, tok->str, tok->len);
+        if (strings) {
+            s->index = strings->index + 1;
+        } else {
+            s->index = 0;
+        }
+        s->next = strings;
+        Node* node = new_string(s);
+        strings = s;
+        return node;
     }
 
     // そうでなければnumのハズ

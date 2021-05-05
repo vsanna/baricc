@@ -24,17 +24,42 @@ assert() {
     fi
 }
 
+# ==========================
+# comment
+# ==========================
+assert 1 '
+int main() {
+    /* return 2; */
+    return 1;
+}
+'
 
+assert 1 '
+int main() {
+    // return 2;
+    return 1;
+}
+'
+exit
 # ==========================
 # string
 # ==========================
-# assert 3 '
-# int main() {
-#     char *a;
-#     a = "hello";
-#     return 1;
-# }
-# '
+assert 97 '
+int main() {
+    char *a;
+    a = "abcd";
+    return a[0];
+}
+'
+
+assert 97 '
+int main() {
+    char *a;
+    a = "abcd!!!!\n";
+    printf(a);
+    return a[0];
+}
+'
 
 # ==========================
 # char

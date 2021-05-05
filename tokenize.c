@@ -4,91 +4,6 @@ Token *token;
 char *user_input;
 LVar *locals[100];
 
-// util
-
-// for debugging
-void print_token(Token *tok) {
-    if (tok == NULL) {
-        fprintf(stderr, "[DEBUG] token is null\n");
-    } else {
-        char name[10] = {0};
-        memcpy(name, tok->str, tok->len);
-        fprintf(stderr, "[DEBUG] token: %s\n", name);
-    }
-}
-
-void print_type(Type *type) {
-    if (type == NULL) {
-        fprintf(stderr, "[DEBUG] type is null\n");
-    } else {
-        char *name;
-        switch (type->ty) {
-            case INT:
-                name = "INT";
-                break;
-            case CHAR:
-                name = "CHAR";
-                break;
-            case PTR:
-                name = "PTR";
-                break;
-            case ARRAY:
-                name = "ARRAY";
-                break;
-            default:
-                break;
-        }
-        fprintf(stderr, "[DEBUG] type = %s\n", name);
-    }
-}
-
-void print_node(Node *node) {
-    if (node == NULL) {
-        fprintf(stderr, "[DEBUG] node is null\n");
-    } else {
-        if (node->funcname) {
-            fprintf(stderr, "[DEBUG] node->funcname = %s\n", node->funcname);
-        }
-        if (node->varname) {
-            fprintf(stderr, "[DEBUG] node->varname = %s\n", node->varname);
-        }
-        if (node->varsize) {
-            fprintf(stderr, "[DEBUG] node->varsize = %d\n", node->varsize);
-        }
-        if (node->kind) {
-            fprintf(stderr, "[DEBUG] node->kind = %d\n", node->kind);
-        }
-    }
-}
-
-void error(char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
-    fprintf(stderr, "\n");
-    exit(1);
-}
-
-void error_at(char *loc, char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-
-    // 今読んでいるaddress - user_inputの先頭のaddress = pos
-    int pos = loc - user_input;
-
-    // エラーのあった箇所から20文字
-    char *tmp[100] = {0};
-    memcpy(tmp, user_input + pos, 30);
-    fprintf(stderr, "=========\n");
-    fprintf(stderr, "%s\n", tmp);
-    fprintf(stderr, "---------\n");
-    vfprintf(stderr, fmt, ap);
-    fprintf(stderr, "\n");
-    fprintf(stderr, "=========\n");
-
-    exit(1);
-}
-
 // 次のトークンが期待している記号のときにはトークンを一つ読み進めてtrueを返す
 // それ以外にはfalseを返す
 bool consume(char *op) {
@@ -193,12 +108,31 @@ Token *tokenize() {
     Token *cur = &head;
 
     while (*p) {
+        // print_token(cur);
+
+        // 空白
         if (isspace(*p)) {
             p++;
             continue;
         }
 
-        // print_token(cur);
+        // 行コメント
+        if (startswith(p, "//")) {
+            while (!startswith(p, "\n")) {
+                p++;
+            }
+            continue;
+        }
+
+        // ブロックコメント
+        if (startswith(p, "/*")) {
+            char *q = strstr(p + 2, "*/");
+            if (!q) {
+                error_at(p, "block comment is not closed.\n");
+            }
+            p = q + 2;
+            continue;
+        }
 
         // identの前に処理する
         // returnがきてなおかつnの次がtokenを構成する文字列ではない
@@ -263,7 +197,8 @@ Token *tokenize() {
             int len = c - p;
             cur = new_token(TK_STRING, cur, p, len);
             p = c;
-            p += 2;
+            p += 1;
+            continue;
         }
 
         error_at(token->str, "トークナイズできません");

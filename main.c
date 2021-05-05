@@ -31,6 +31,18 @@ int main(int argc, char** argv) {
         }
     }
 
+    // TODO:
+    // .LC0 :
+    //   .string "hello"
+    // name :
+    //   .quad .LC0
+    // TODO: .dataを調べる
+    printf(".data\n");
+    for (StringToken* str = strings; str; str = str->next) {
+        printf(".LC%d:\n", str->index);
+        printf("  .string \"%s\"\n", str->value);
+    }
+
     // つづいて関数定義
     printf(".text\n");  // TODO: what's this
     printf(".globl main\n");

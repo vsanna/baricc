@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -55,6 +56,14 @@ struct LVar {
 
 LVar* find_variable(Token* tok);
 
+// stringでありながらかつそのmap的なもの
+typedef struct StringToken StringToken;
+struct StringToken {
+    char* value;
+    int index;
+    StringToken* next;
+};
+
 // read_define用
 typedef struct Define Define;
 struct Define {
@@ -103,6 +112,7 @@ typedef enum {
     ND_FUNC_DEF,
     ND_ADDR,
     ND_DEREF,
+    ND_STRING,
 } NodeKind;
 
 typedef struct Node Node;
@@ -111,14 +121,15 @@ struct Node {
     NodeKind kind;
     Node* lhs;
     Node* rhs;
-    Node** block;    // used when kind == ND_BLOCK
-    int val;         // used when kind == ND_NUM
-    int offset;      // used when kind == ND_LVAR
-    char* funcname;  // used when kind == ND_FUNC_CALL, or ND_FUNC_DEF
-    Node** args;     // used when kind == ND_FUNC_DEF
-    Type* type;      // used when kind == ND_LVAR
-    char* varname;   // used when kind == ND_GVAR, ND_LVAR
-    int varsize;     // used when kind == ND_GVAR, ND_LVAR Byte.
+    Node** block;         // used when kind == ND_BLOCK
+    int val;              // used when kind == ND_NUM
+    int offset;           // used when kind == ND_LVAR
+    char* funcname;       // used when kind == ND_FUNC_CALL, or ND_FUNC_DEF
+    Node** args;          // used when kind == ND_FUNC_DEF
+    Type* type;           // used when kind == ND_LVAR
+    char* varname;        // used when kind == ND_GVAR, ND_LVAR
+    int varsize;          // used when kind == ND_GVAR, ND_LVAR Byte.
+    StringToken* string;  // used when kind == ND_STRING
 };
 
 Node* new_node(NodeKind kind);
@@ -168,3 +179,5 @@ extern Node* code[100];
 extern LVar* locals[100];
 extern int cur_scope_depth;
 extern LVar* globals[100];
+extern StringToken* strings;
+extern char* filename;

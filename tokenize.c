@@ -7,11 +7,58 @@ LVar *locals[100];
 // util
 
 // for debugging
-void print_token(Token *token) {
-    char name[10] = {0};
-    memcpy(name, token->str, token->len);
-    fprintf(stderr, "[DEBUG] token: %s\n", name);
-    return;
+void print_token(Token *tok) {
+    if (tok == NULL) {
+        fprintf(stderr, "[DEBUG] token is null\n");
+    } else {
+        char name[10] = {0};
+        memcpy(name, tok->str, tok->len);
+        fprintf(stderr, "[DEBUG] token: %s\n", name);
+    }
+}
+
+void print_type(Type *type) {
+    if (type == NULL) {
+        fprintf(stderr, "[DEBUG] type is null\n");
+    } else {
+        char *name;
+        switch (type->ty) {
+            case INT:
+                name = "INT";
+                break;
+            case CHAR:
+                name = "CHAR";
+                break;
+            case PTR:
+                name = "PTR";
+                break;
+            case ARRAY:
+                name = "ARRAY";
+                break;
+            default:
+                break;
+        }
+        fprintf(stderr, "[DEBUG] type = %s\n", name);
+    }
+}
+
+void print_node(Node *node) {
+    if (node == NULL) {
+        fprintf(stderr, "[DEBUG] node is null\n");
+    } else {
+        if (node->funcname) {
+            fprintf(stderr, "[DEBUG] node->funcname = %s\n", node->funcname);
+        }
+        if (node->varname) {
+            fprintf(stderr, "[DEBUG] node->varname = %s\n", node->varname);
+        }
+        if (node->varsize) {
+            fprintf(stderr, "[DEBUG] node->varsize = %d\n", node->varsize);
+        }
+        if (node->kind) {
+            fprintf(stderr, "[DEBUG] node->kind = %d\n", node->kind);
+        }
+    }
 }
 
 void error(char *fmt, ...) {
@@ -55,7 +102,7 @@ bool consume(char *op) {
     return true;
 }
 
-// 次のトークンが指定したtokenであれば一つ読み進めてそのtokenを返す
+// current tokenが指定したTokenKindであれば、それを返しつつ、1つよみ進める
 // それ以外はNULL
 Token *consume_kind(TokenKind kind) {
     if (token->kind != kind) {
@@ -102,7 +149,8 @@ void advance_token() {
 bool at_eof() { return token->kind == TK_EOF; }
 
 // 新しいトークンを作成してcurのnextにセット
-// ?"+ 12 - hoge" が渡ってきたとき、tok->str = str で先頭の1文字だけ渡るのはなぜ
+// TODO: "+ 12 - hoge" が渡ってきたとき、tok->str = str
+// で先頭の1文字だけ渡るのはなぜ
 //   ->
 //   わかった。その位置のアドレスを保持しているのみで、ちゃんとsplitしているわけではない...
 Token *new_token(TokenKind kind, Token *cur, char *str, int len) {
@@ -128,9 +176,9 @@ typedef struct ReservedWord {
 } ReservedWord;
 
 ReservedWord reserved_words[] = {
-    {"return", TK_RETURN}, {"if", TK_IF},   {"else", TK_ELSE},
-    {"while", TK_WHILE},   {"for", TK_FOR}, {"int", TK_TYPE},
-    {"sizeof", TK_SIZEOF}, {"", TK_EOF},
+    {"return", TK_RETURN}, {"if", TK_IF},         {"else", TK_ELSE},
+    {"while", TK_WHILE},   {"for", TK_FOR},       {"int", TK_TYPE},
+    {"char", TK_TYPE},     {"sizeof", TK_SIZEOF}, {"", TK_EOF},
 };
 
 // 入力文字列pをトークない頭してそれを返す
@@ -206,8 +254,21 @@ Token *tokenize() {
             continue;
         }
 
+        if ('"' == *p) {
+            p++;
+            char *c = p;
+            while ('"' != *c) {
+                c++;
+            }
+            int len = c - p;
+            cur = new_token(TK_STRING, cur, p, len);
+            p = c;
+            p += 2;
+        }
+
         error_at(token->str, "トークナイズできません");
     }
+
     // print_token(cur);
     new_token(TK_EOF, cur, p, 0);
     return head.next;

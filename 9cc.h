@@ -19,6 +19,7 @@ typedef enum {
     TK_FOR,
     TK_TYPE,  // type annotation
     TK_SIZEOF,
+    TK_STRING,
 } TokenKind;
 
 typedef struct Token Token;
@@ -33,7 +34,7 @@ struct Token {
 // 型情報. ptr/arrayはその先の型情報も必要なので、それをptr_toとして持つ
 // TODO ptr_toをofとかにrenameしたい
 typedef struct Type {
-    enum { INT, PTR, ARRAY } ty;
+    enum { INT, CHAR, PTR, ARRAY } ty;
     struct Type*
         ptr_to;  // used when ty == PTR, ARRAY. 指し示す先の変数の型を持つ
     size_t array_size;
@@ -45,7 +46,9 @@ struct LVar {
     LVar* next;
     char* name;
     int len;  // length of name
-    int offset;
+    int offset;  // 関数ごとの初期RSPまたはglobalの起点からのoffset.
+                 // 変数が増えるにつれて値は大きくなる.
+                 // つまりstackの上に進む(stackの先頭からは遠ざかる)
     Type* type;
     enum { LOCAL, GLOBAL } kind;
 };
@@ -65,8 +68,6 @@ Token* consume_kind(TokenKind kind);
 void expect(char* op);
 int expect_number();
 void advance_token();
-
-void print_token(Token* token);
 bool at_eof();
 Token* new_token(TokenKind kind, Token* cur, char* str, int len);
 bool startswith(char* p, char* q);
@@ -117,7 +118,7 @@ struct Node {
     Node** args;     // used when kind == ND_FUNC_DEF
     Type* type;      // used when kind == ND_LVAR
     char* varname;   // used when kind == ND_GVAR, ND_LVAR
-    int varsize;     // used when kind == ND_GVAR, ND_LVAR
+    int varsize;     // used when kind == ND_GVAR, ND_LVAR Byte.
 };
 
 Node* new_node(NodeKind kind);
@@ -155,6 +156,9 @@ void gen_val(Node* node);
 void print_token(Token* token);
 void error_at(char* loc, char* fmt, ...);
 void error(char* fmt, ...);
+
+void print_type(Type* type);
+void print_node(Node* node);
 
 // global variables
 extern Token* token;

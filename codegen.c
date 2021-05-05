@@ -2,7 +2,12 @@
 LVar* locals[];
 int cur_scope_depth;
 
-char* argregs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+// char* argregs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+// サイズ(byte)ごとのレジスタのset
+static char* argreg1[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
+static char* argreg2[] = {"di", "si", "dx", "cx", "r8w", "r9w"};
+static char* argreg4[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
+static char* argreg8[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 
 // TODO: ここが評価(コード生成)ロジックの中心なので別ファイルに後で移す.
 // 構文木からアセンブラを作るところまで一気に進める
@@ -40,12 +45,27 @@ void gen(Node* node) {
 
             // そのアドレスをraxにいれ
             printf("  pop rax\n");
-            // そのアドレスにある値をraxにいれ、
-            printf("  mov rax, [rax]\n");
+
+            /*
+            そのアドレスにある値をraxにいれる。
+            指定したアドレスからデフォルトでは8個分のアドレスにある値をとってきてしまうので、
+            必要な長さを指定する
+            */
+            if (type && type->ty == CHAR) {
+                // TODO: what's this
+                printf("  movsx rax, BYTE PTR [rax]\n");
+            } else if (type && type->ty == INT) {
+                // TODO: what's this
+                printf("  movsxd rax, DWORD PTR [rax]\n");
+            } else {
+                printf("  mov rax, [rax]\n");
+            }
+
             // その値をスタックの先頭にpush
             printf("  push rax\n");
             return;
         case ND_ASSIGN:
+            type = get_type(node);
             // 左辺の左辺値のアドレスをstackにpush
             gen_val(node->lhs);
             // 右辺を計算した値をstackにpush
@@ -54,8 +74,24 @@ void gen(Node* node) {
             printf("  pop rdi\n");
             // 左辺のアドレスをpopしてraxに入れる
             printf("  pop rax\n");
-            // raxのアドレスの指す場所にrdiを入れる
-            printf("  mov [rax], rdi\n");
+
+            /*
+            raxの示すアドレスに64bitのレジスタをmovすると、示すアドレスから数えて8個分の
+            アドレスに値が書き込まれることになる
+
+            8B未満のデータの配列を連続して書き込む場合はそれだと不要な書き込みが発生するので、
+            レジスタの下位Nbitだけを書き込むことをaliasを用いて指定する
+            */
+            if (type && type->ty == CHAR) {
+                // NOTE: dil = rdiの下位8bitのalias
+                printf("mov [rax], dil\n");
+            } else if (type && type->ty == INT) {
+                // NOTE: edi = rdiの下位32bitのalias
+                printf("  mov [rax], edi\n");
+            } else {
+                printf("  mov [rax], rdi\n");
+            }
+
             // rdiの値 = 計算結果をstackの頂点に入れておく
             // こうすることで a = b = 10 みたいな式がかける
             printf("  push rdi\n");
@@ -171,7 +207,7 @@ void gen(Node* node) {
             TODO: 一旦引数は6個までサポート
             */
 
-            // 引数をまず評価. stackにpushしていく
+            // 引数をまず評価してはstackにpushしていく
             for (int i = 0; node->block[i] != NULL; i++) {
                 gen(node->block[i]);
                 num_args++;
@@ -180,34 +216,52 @@ void gen(Node* node) {
                 error_at(token->str, "invalid number of args. lteq 6.");
             }
 
-            // 引数を"後ろから"ABI指定のregに投入
+            // 引数を"後ろから"ABI指定のregisterに投入
             // 現在stackの一番上には最後の引数を評価した値が入っている
             for (int i = num_args - 1; i >= 0; i--) {
-                printf("  pop %s\n", argregs[i]);
+                printf("  pop %s\n", argreg8[i]);
             }
 
             // RSPを16の倍数にする調整
+            // printf("  mov rax, rsp\n");
+            // printf("  and rax, 15\n");  // 下位4bitがすべて0なら16の倍数
+            // printf("  cmp rsi, 0\n");
+            // printf("  je .L.callDirectly.%d\n", id);
+            // printf("  mov rax, 0\n");
+            // printf("  sub rsp, 8\n");
+            // printf("  call %s\n", node->funcname);
+            // printf("  add rsp, 8\n");
+            // printf("  jmp .L.called.%d\n", id);
+            // // 次のラインをreturn addrとしてstackに積みつつ関数のところにjump
+            // printf(".L.callDirectly.%d:\n", id);
+            // printf("  mov rax, 0\n");
+            // printf("  call %s\n", node->funcname);
+            // printf(".L.called.%d:\n", id);
+            // printf("  push rax\n");  // raxに返り値が格納されている(ABI)
+            // return;
+
             printf("  mov rax, rsp\n");
-            printf("  and rax, 15\n");  // 下位4bitがすべて0なら16の倍数
-            printf("  cmp rsi, 0\n");
-            printf("  je .L.callDirectly.%d\n", id);
+            printf("  and rax, 15\n");
+            printf("  jnz .L.call.%03d\n", id);
             printf("  mov rax, 0\n");
-            printf("  sub rsp, 8\n");
+            printf("  call %s\n", node->funcname);
+            printf("  jmp .L.end.%03d\n", id);
+            printf(".L.call.%03d:\n", id);
+            printf(
+                "  sub rsp, 8\n");  // TODO:
+                                    // rspの値が16の倍数でないとき、8をひけばいいだけ?
+            printf("  mov rax, 0\n");  // ALに0を入れる。
             printf("  call %s\n", node->funcname);
             printf("  add rsp, 8\n");
-            printf("  jmp .L.called.%d\n", id);
-            // 次のラインをreturn addrとしてstackに積みつつ関数のところにjump
-            printf(".L.callDirectly.%d:\n", id);
-            printf("  mov rax, 0\n");
-            printf("  call %s\n", node->funcname);
-            printf(".L.called.%d:\n", id);
-            printf("  push rax\n");  // raxに返り値が格納されている(ABI)
+            printf(".L.end.%03d:\n", id);
+            printf("  push rax\n");  // FIXME あってる？？
             return;
         case ND_FUNC_DEF:
             // label
+            printf(".global %s\n", node->funcname);
             printf("%s:\n", node->funcname);
 
-            // エピローグ
+            // プロローグ
             /*
             ret address  <- (1) call直後のRSP
             caller's RBP <- (2) ましたの2命令が終わったあとのRSP, RBP
@@ -217,26 +271,33 @@ void gen(Node* node) {
             */
             printf("  push rbp\n");
             printf("  mov rbp, rsp\n");
-            for (int i = 0; node->args[i]; i++) {
-                printf("  push %s\n", argregs[i]);
-                num_args++;
-            }
-            // 引数の数を覗いた変数の数文rspを"さらに"ずらして、変数領域を確保する
-            // この関数のためだけのlocals領域をstack先頭に確保するようなイメージ
-            // TODO: えー、本当? 理論と実践ではどうしてたっけ
-            // TODO:
-            // 昔のcはローカル変数を先頭に宣言していた、みたいな話と関係あるのか...
+
+            // 引数の数を覗いた変数の数だけrspを"さらに"ずらして、変数領域を確保する
+            // この関数のためだけのlocals領域を関数フレーム先頭に確保するイメージ
             if (locals[cur_scope_depth]) {
                 int offset = locals[cur_scope_depth]->offset;
-                fprintf(stderr, "OFFSET: %d\n", offset);
-                offset -= num_args * 8;
                 printf("  sub rsp, %d\n", offset);
+            }
+
+            // call-funcした際にABI指定のregisterに保存した引数を
+            // 上の処理でずらした隙間に入れていく.
+            for (int i = 0; node->args[i]; i++) {
+                if (node->args[i]->varsize == 1) {
+                    printf("  mov [rbp-%d], %s\n", node->args[i]->offset,
+                           argreg1[i]);
+                } else if (node->args[i]->varsize == 4) {
+                    printf("  mov [rbp-%d], %s\n", node->args[i]->offset,
+                           argreg4[i]);
+                } else {
+                    printf("  mov [rbp-%d], %s\n", node->args[i]->offset,
+                           argreg8[i]);
+                }
             }
 
             // 内容
             gen(node->lhs);
 
-            // プロローグ
+            // エピローグ
             // printf("  mov rax, 0\n");
             printf("  mov rsp, rbp\n");
             printf("  pop rbp\n");

@@ -34,6 +34,8 @@ int main(int argc, char** argv) {
     // つづいて関数定義
     printf(".text\n");  // TODO: what's this
     printf(".globl main\n");
+    // 定義した順番にgenしていく
+    cur_scope_depth = 0;
     for (int i = 0; code[i]; i++) {
         if (code[i]->kind == ND_FUNC_DEF) {
             cur_scope_depth++;

@@ -36,14 +36,14 @@ Node* code[100];
 /**************************
  * parse functions
  * *************************/
-// program = func_def*
+// program = (func_def | define_variable ";")*
 // programをまずは関数の束とする
 void program() {
     int i = 0;
     while (!at_eof()) {
         Define* def = read_define_head();
         if (def == NULL) {
-            fprintf(stderr, "def is NULL\n");
+            error("def is NULL\n");
             print_token(token);
         }
         if (consume("(")) {
@@ -63,6 +63,7 @@ void program() {
 }
 
 // func_def = type-annotation ident "(" ("int" ident ("," "int" ident)*)? ")"
+//                                       ^start
 // block.
 // type-annotation ident までは読み込み済み
 Node* func_def(Define* def) {
@@ -181,16 +182,16 @@ Node* stmt() {
         return node;
     }
 
+    Node* block_node = block();
+    if (block_node != NULL) {
+        return block_node;
+    }
+
     Define* def = read_define_head();
     if (def != NULL) {
         Node* node = define_variable(def, locals);
         expect(";");
         return node;
-    }
-
-    Node* block_node = block();
-    if (block_node != NULL) {
-        return block_node;
     }
 
     node = expr();
@@ -270,19 +271,19 @@ Node* add() {
     for (;;) {
         if (consume("+")) {
             if (node->type != NULL && node->type->ty != INT) {
-                // pointer calc
-                int n = node->type->ptr_to->ty == INT ? 4 : 8;
-                node = new_binary(ND_ADD, node,
-                                  new_binary(ND_MUL, mul(), new_num(n)));
+                int size_of_type = get_type_size(node->type->ptr_to);
+                node = new_binary(
+                    ND_ADD, node,
+                    new_binary(ND_MUL, mul(), new_num(size_of_type)));
             } else {
                 node = new_binary(ND_ADD, node, mul());
             }
         } else if (consume("-")) {
             if (node->type != NULL && node->type->ty != INT) {
-                // pointer calc
-                int n = node->type->ptr_to->ty == INT ? 4 : 8;
-                node = new_binary(ND_SUB, node,
-                                  new_binary(ND_MUL, mul(), new_num(n)));
+                int size_of_type = get_type_size(node->type->ptr_to);
+                node = new_binary(
+                    ND_SUB, node,
+                    new_binary(ND_MUL, mul(), new_num(size_of_type)));
             } else {
                 node = new_binary(ND_SUB, node, mul());
             }
@@ -387,7 +388,9 @@ Node* primary() {
 // TODO: block切って同名/別型変数を宣言したときに既存言語でエラーになるかどうか
 // NOTE: 型宣言の最初にいる状態で呼ばれる. *とidentの処理を行う
 // define_variable = "int" "*"* ident
-//                   | "int" "*"* ident "[" number "]"
+//                                    ^start/end
+//                 | "int" "*"* ident "[" number "]"
+//                                    ^start        ^end
 Node* define_variable(Define* def, LVar** varlist) {
     if (def == NULL) {
         error("invalid definition of function or variable");
@@ -409,45 +412,40 @@ Node* define_variable(Define* def, LVar** varlist) {
         type = t;
         size *= t->array_size;
         expect("]");
-        fprintf(stderr, "arary size: %ld\n", type->array_size);
-    }
-
-    // NOTE: sizeは8の倍数でないとだめ(1word8bitだからだと思われる)
-    while ((size % 8) != 0) {
-        size += 4;
+        // fprintf(stderr, "[DEBUG] arary size: %ld\n", type->array_size);
     }
 
     Node* node = new_node(ND_LVAR);
-    LVar* lvar = find_variable(tok);
+    LVar* var = find_variable(tok);
 
     node->varname = calloc(100, sizeof(char));
     memcpy(node->varname, tok->str, tok->len);
     node->varsize = size;
 
     // 新規変数の定義なのでlvarあってはこまる
-    if (lvar) {
+    if (var) {
         error("redefining variable %s", node->varname);
     }
 
     // 新規変数なのでlvarを追加する
-    lvar = calloc(1, sizeof(LVar));
-    lvar->next = varlist[cur_scope_depth];
-    lvar->name = tok->str;
-    lvar->len = tok->len;
-    lvar->type = type;
-    lvar->kind = (varlist == locals) ? LOCAL : GLOBAL;
+    var = calloc(1, sizeof(LVar));
+    var->next = varlist[cur_scope_depth];
+    var->name = tok->str;
+    var->len = tok->len;
+    var->type = type;
+    var->kind = (varlist == locals) ? LOCAL : GLOBAL;
 
     if (varlist[cur_scope_depth] == NULL) {
-        lvar->offset = size;
+        var->offset = size;
     } else {
-        lvar->offset = varlist[cur_scope_depth]->offset + size;
+        var->offset = varlist[cur_scope_depth]->offset + size;
     }
-    varlist[cur_scope_depth] = lvar;
+    varlist[cur_scope_depth] = var;
 
     // nodeを完成させる
     node->offset = varlist[cur_scope_depth]->offset;
     node->type = type;
-    node->kind = (lvar->kind == LOCAL) ? ND_LVAR : ND_GVAR;
+    node->kind = (var->kind == LOCAL) ? ND_LVAR : ND_GVAR;
     return node;
 }
 
@@ -541,17 +539,42 @@ Type* get_type(Node* node) {
 // 渡ってきたtypeのサイズを返す.
 // INT -> 4
 // PTR -> 8
+// CHAR -> 1
 int get_type_size(Type* type) {
     if (type == NULL) {
         error("type should be non null");
     }
-    return (type && type->ty == PTR) ? 8 : 4;
+
+    // print_type(type);
+    switch (type->ty) {
+        case INT:
+            return 4;
+        case PTR:
+            return 8;
+        case CHAR:
+            return 1;
+        case ARRAY:
+            return get_type_size(type->ptr_to) * type->array_size;
+        default:
+            error("unexpected Type->ty comes here\n");
+    }
 }
 
 // type_annotation = ("int"|"char") "*"*
+// assume:  current token = ("int"|"char")
+// move to: current token = *の次
 Type* type_annotation() {
+    Token* typeToken = consume_kind(TK_TYPE);
+    if (typeToken == NULL) {
+        return NULL;
+    }
+
     Type* type = calloc(1, sizeof(Type));
-    type->ty = INT;  // とりあえず
+    int isChar = memcmp("char", typeToken->str, typeToken->len) == 0;
+
+    char* tmp[100] = {0};
+    memcpy(tmp, typeToken->str, typeToken->len);
+    type->ty = isChar ? CHAR : INT;
 
     // ここで*を読む
     while (consume("*")) {
@@ -567,19 +590,20 @@ Type* type_annotation() {
 // 関数またはグローバル変数の定義の前半のみをreadする
 // その読んだ情報をDefineをcontainerとして流用してそこに詰めて返す
 // int** hoge までを読む.
+// assume:  current token = int
+// move to: current token = ident
 Define* read_define_head() {
-    // read type annotation of return value
-    if (!consume_kind(TK_TYPE)) {
-        // error("type annotation of func is needed");
+    // read type "*"*
+    Type* type = type_annotation();
+    if (type == NULL) {
         return NULL;
     }
 
-    Type* type = type_annotation();
-
     Node* node = NULL;
     Token* tok = consume_kind(TK_IDENT);
+
     if (tok == NULL) {
-        error("here function must come");
+        error("function name(ident) should come here.");
     }
 
     Define* def = calloc(1, sizeof(Define));

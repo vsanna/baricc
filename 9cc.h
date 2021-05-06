@@ -171,13 +171,15 @@ void error(char* fmt, ...);
 void print_type(Type* type);
 void print_node(Node* node);
 
+char* read_file(char* path);
+
 // global variables
 extern Token* token;
 extern char* user_input;
+extern char* filename;
 extern Node* code[100];
 // TODO: localsはメモリにはどうマッピングされるんだっけ. offsetの計算するだけ?
 extern LVar* locals[100];
 extern int cur_scope_depth;
 extern LVar* globals[100];
 extern StringToken* strings;
-extern char* filename;

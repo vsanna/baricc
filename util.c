@@ -36,7 +36,7 @@ void print_token(Token *tok) {
     if (tok == NULL) {
         fprintf(stderr, "[DEBUG] token is null\n");
     } else {
-        char name[10] = {0};
+        char name[100] = {0};
         memcpy(name, tok->str, tok->len);
         fprintf(stderr, "[DEBUG] token: %s\n", name);
     }

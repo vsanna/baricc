@@ -12,7 +12,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    user_input = argv[1];
+    // fileから
+    filename = argv[1];
+    user_input = read_file(filename);
+    // 文字列から
+    // user_input = argv[1];
+
     token = tokenize();
     cur_scope_depth = 0;
     program();

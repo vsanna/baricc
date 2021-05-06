@@ -407,6 +407,10 @@ Node* primary() {
     return new_num(expect_number());
 }
 
+// initialize_variable
+//   = type-annotation ident ("[" number? "]"")? "=" expr ";"
+Node* initialize_variable() {}
+
 // stmtの一つ. 変数を宣言する.
 // ND_LVARを返しつつ、LVarを作ってlocalsに追加する
 // TODO: これは意味解析も一緒にやっちゃってないか? それはいいの?

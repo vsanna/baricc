@@ -23,6 +23,23 @@ $ export SEGFAULT_SIGNALS="all"
 # g optionをコンパイラにつけておく
 $ make test
 $ gdb 9cc core
+
+
+$ gdb 9cc
+# breakpointをセット file:line
+> b codegen.c:61
+> run "test/test.c"
+
+> bt :     backtrace表示
+> l :      前後のソースをいい感じに出してくれる
+> i lo :   ローカル変数一覧
+> i args : 引数一覧
+> p variable : ex: p node->type)
+> n : ステップ実行
+> s : ステップ実行(funcに入る)
+> c : 次のbreak point
+
+ref: https://qiita.com/arene-calix/items/a08363db88f21c81d351
 ```
 
 ## 難所
@@ -41,3 +58,6 @@ $ gdb 9cc core
     - こまめなcommitと手厚いtestでいつでもresetできる精神状態が必須
 - off by one が難しい
     - 各parse関数には「current tokenがなんのときにこの関数に入り、どの位置で出ていくか」を明確に定義する
+- 配列. 配列特有の機能を一部サポートしながらもいかにpointerに書き換えていくか
+
+

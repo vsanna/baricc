@@ -21,7 +21,7 @@ void gen(Node* node) {
 
     switch (node->kind) {
         case ND_STRING:
-            // TODO: push offsetを調べる
+            // TODO: push offset {symbol, label} を調べる
             printf("  push offset .LC%d\n", node->string->index);
             return;
         case ND_NUM:
@@ -34,8 +34,11 @@ void gen(Node* node) {
                 int *c = &a;
                 char *d = b + 3;
 
+                // data領域にlong型(=8byte)で3という値をおいてaというラベルを付ける
                 a:
                 .long 3
+
+                // data領域にbyte型(=1byte)で各値をおいてその先頭にbというラベルを付ける
                 b:
                 .byte 0x66 // 'f'
                 .byte 0x6f // 'o'
@@ -44,12 +47,22 @@ void gen(Node* node) {
                 .byte 0x61 // 'a'
                 .byte 0x72 // 'r'
                 .byte 0    // '\0'
+
+                // data領域にquad型(=4byte)で値をおく.
+                // すでに定義済みのシンボルの値を使える.
                 c:
                 .quad a
                 d:
                 .quad b + 3
+
+                // TODO .quad {symbol or val} の解釈
+                // TODO .quad {symbol or val}+1 の解釈
+                // TODO .string {symbol or val}+1 の解釈
+                // TODO .ascii {symbol or val}+1 の解釈
+                // TODO .zero {symbol or val}+1 の解釈
+
+                https://mfumi.hatenadiary.org/entry/20121231/1356880556
             */
-            // TODO: .zeroの意味調べる.
             // staticな場所からどれだけの場所を確保するか?
             printf("%s:\n", node->varname);
 
@@ -58,7 +71,8 @@ void gen(Node* node) {
                 return;
             }
 
-            if (node->type->ty == ARRAY) {
+            // g_msg2[4] = "bar"; のようにarrayでも{}の初期化式(block)がないことがある
+            if (node->type->ty == ARRAY && node->var->init->block) {
                 for (int i = 0; node->var->init->block[i]; i++) {
                     switch (node->type->ptr_to->ty) {
                         case INT:
@@ -83,12 +97,23 @@ void gen(Node* node) {
 
             // string単体の場合
             if (node->var->init->kind == ND_STRING) {
-                printf("  .quad .LC%d\n", node->var->init->string->index);
+                // NOTE: .LC%d ラベルにセットされている `.string {val}`を指すアドレスを作る
+                // char* (と char[]) がcではstring相当.
+
+                // TODO: ここ理解する. node->typeはnodeがVARのときに入る.
+                if (node->type->ty == ARRAY) {
+                    // 1. char a[3] = "hoge" のケース
+                    printf("  .string \"%s\"\n",
+                           node->var->init->string->value);
+                } else {
+                    // 2. char *a = "hoge" のケース
+                    printf("  .quad .LC%d\n", node->var->init->string->index);
+                }
                 return;
             }
 
             // int 単体の場合
-            printf("  .long %d\n", node->var->init->val);
+            printf("  .long 0x%x\n", node->var->init->val);
             return;
         case ND_GVAR:
         case ND_LVAR:

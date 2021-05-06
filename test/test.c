@@ -6,7 +6,7 @@ int g_array[5] = {0, 1, 2, 3, 4};
 
 char g_array2[5] = {5, 6, 7, 8, 12};
 char *g_msg1 = "foo";
-// char g_msg2[] = "bar";
+char g_msg2[4] = "bar";
 // char *g_strings[] = {"abc", "def"};
 
 // struct Hoge {
@@ -337,41 +337,44 @@ int test_gloval_variable_init() {
     assert(102, g_msg1[0]);
     assert(111, g_msg1[2]);
 
-    // assert(98, g_msg2[0]);
-    // assert(114, g_msg2[2]);
+    assert(98, g_msg2[0]);
+    assert(114, g_msg2[2]);
 }
 
-// int test_local_variable_init() {
-//     int a = 10;
-//     assert(10, a);
+int test_local_variable_init() {
+    int a = 10;
+    assert(10, a);
 
-//     int b[3] = {1, 2, 7};
-//     assert(1, b[0]);
-//     assert(2, b[1]);
-//     assert(7, b[2]);
+    int b[3] = {1, 2, 7};
+    assert(1, b[0]);
+    assert(2, b[1]);
+    assert(7, b[2]);
 
-//     int c[] = {1, 2};
-//     int d[5] = {5};
-//     int e[3] = {3, 4, 5};
+    int c[] = {1, 2};
+    int d[5] = {5};
+    int e[3] = {3, 4, 5};
+    int e2[2] = {3, 4, 5};  // 初期化の数優先
 
-//     assert(1, c[0]);
-//     assert(2, c[1]);
+    assert(1, c[0]);
+    assert(2, c[1]);
 
-//     assert(5, d[0]);
-//     assert(0, d[1]);
+    assert(5, d[0]);
+    assert(0, d[1]);
 
-//     assert(3, e[0]);
-//     assert(5, e[2]);
+    assert(3, e[0]);
+    assert(5, e[2]);
 
-//     char abc[10] = "abc";
-//     char def[] = "def";
+    assert(5, e2[2]);
 
-//     assert(97, abc[0]);
-//     assert(99, abc[2]);
+    char abc[10] = "abc";
+    char def[] = "def";
 
-//     assert(100, def[0]);
-//     assert(102, def[2]);
-// }
+    assert(97, abc[0]);
+    assert(99, abc[2]);
+
+    assert(100, def[0]);
+    assert(102, def[2]);
+}
 
 // int test_struct() {
 //     struct {
@@ -675,11 +678,11 @@ int main() {
     test_sizeof();
     test_array();
     test_array_access();
-    // test_global_variable();
+    test_global_variable();
     test_char();
     test_string();
     test_gloval_variable_init();
-    // test_local_variable_init();
+    test_local_variable_init();
     // test_struct();
     // test_typedef();
     // test_enum();

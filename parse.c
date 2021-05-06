@@ -198,6 +198,8 @@ Node* stmt() {
     Define* def = read_define_head();
     if (def != NULL) {
         Node* node = define_variable(def, locals);
+        // NOTE: ND_ASSIGNに変換
+        node = local_variable_init(node);
         expect(";");
         return node;
     }
@@ -434,10 +436,15 @@ Node* define_variable(Define* def, LVar** varlist) {
         t = calloc(1, sizeof(Type));
         t->ty = ARRAY;
         t->ptr_to = type;
-        t->array_size = expect_number();
+
+        // size of array is optional.
+        t->array_size = 0;
+        Token* num = NULL;
+        if (num = consume_kind(TK_NUM)) {
+            t->array_size = num->val;
+        }
 
         type = t;
-        size *= t->array_size;
         expect("]");
         fprintf(stderr, "[DEBUG] arary size: %ld\n", type->array_size);
     }
@@ -449,23 +456,50 @@ Node* define_variable(Define* def, LVar** varlist) {
         なぜならアセンブラとして吐き出したいコードがぜんぜん違うから。
         - assign: 左辺のアドレスをpush -> 右辺を評価 -> 右辺の値をpush -> 左辺のアドレスに右辺の値をmov
         - globalのinit: .data領域に書き込み
-        - localのinit: assignとして扱ってもOK.(のハズ)
+        - localのinit: 初期化式でのみ使える表現がある. よってだめ.
+
+        > 初期化式は一見ただの代入式のように見えますが、実際は初期化式と代入式は文法的にかなり異なっていて、
+        > 初期化式だけに許された特別な書き方というものがいくつかあります。
+        > ここでその特別な書き方をきちんと把握しておきましょう。
         */
         if (consume("{")) {
             // TODO 最大100要素まで
             init = calloc(1, sizeof(Node));
             init->block = calloc(100, sizeof(Node));
-            for (int i = 0; !consume("}"); i++) {
+            int i = 0;
+            for (; !consume("}"); i++) {
                 if (i != 0) {
                     expect(",");
                 }
 
                 init->block[i] = expr();
             }
-        } else if (consume('"')) {
+            // 初期化子の数のほうがサイズよりも大きい場合はそちらでうわがく
+            if (type->array_size < i) {
+                type->array_size = i;
+            }
+
+            // 不足分の要素を埋める
+            i++;
+            for (; i < type->array_size; i++) {
+                init->block[i] = new_num(0);
+            }
         } else {
             init = expr();
+            if (init->kind == ND_STRING) {
+                int len = type->array_size = strlen(init->string->value) + 1;
+                if (type->array_size < len) {
+                    type->array_size = len;
+                }
+            }
         }
+    }
+
+    if (type->ty == ARRAY) {
+        if (type->array_size == 0) {
+            error("array size is not defined.\n");
+        }
+        size *= type->array_size;
     }
 
     Node* node = new_node(ND_LVAR);
@@ -588,6 +622,88 @@ LVar* find_variable(Token* tok) {
         }
     }
     return NULL;
+}
+
+// 初期化の=よりもあとから.
+Node* local_variable_init(Node* node) {
+    if (!node->var->init) {
+        return node;
+    }
+
+    // 初期化式が配列
+    // int a[2] = {1, 2};
+    // を
+    // int a[2];
+    // a[0] = 1;
+    // a[1] = 2;
+    // として評価する
+    //
+    // 初期化式の数がarray_sizeに足りてない場合はzero値いれる
+
+    // TODO: 真下の処理と統一
+    if (node->var->init->kind == ND_STRING) {
+        // 文字列の場合は各charをそれぞれ代入する形にする
+        // NOTE: この時点ではnode->varは用意済み. ident/type入ってる. typeがarrayの場合もsize入れ込み済み
+        Node* block = new_node(ND_BLOCK);
+        block->block = calloc(node->var->type->array_size, sizeof(Node));
+
+        int len = strlen(node->var->init->string->value);
+        for (int i = 0; i < node->var->type->array_size; i++) {
+            // a[0] ==> *(a + 0 * size)
+            Node* add = new_node(ND_ADD);
+            add->lhs = node;
+            if (node->type && node->type->ty != INT) {
+                int size = get_type_size(node->type->ptr_to);
+                add->rhs = new_num(i * size);
+            }
+            Node* deref = new_node(ND_DEREF);
+            deref->lhs = add;
+
+            Node* assign = new_node(ND_ASSIGN);
+            assign->lhs = deref;
+
+            if (len > i) {
+                assign->rhs = new_num(node->var->init->string->value[i]);
+            } else {
+                assign->rhs = new_num(0);
+            }
+
+            block->block[i] = assign;
+        }
+
+        return block;
+    }
+
+    if (node->var->init->block) {
+        Node* block = new_node(ND_BLOCK);
+        block->block = calloc(node->var->type->array_size, sizeof(Node));
+
+        for (int i = 0; node->var->init->block[i]; i++) {
+            // a[0] ==> *(a + 0 * size)
+            Node* add = new_node(ND_ADD);
+            add->lhs = node;
+            if (node->type && node->type->ty != INT) {
+                int size = get_type_size(node->type->ptr_to);
+                add->rhs = new_num(i * size);
+            }
+            Node* deref = new_node(ND_DEREF);
+            deref->lhs = add;
+
+            Node* assign = new_node(ND_ASSIGN);
+            assign->lhs = deref;
+            assign->rhs = node->var->init->block[i];
+
+            block->block[i] = assign;
+        }
+
+        return block;
+    }
+
+    Node* assign = new_node(ND_ASSIGN);
+    assign->lhs = node;
+    assign->rhs = node->var->init;
+
+    return assign;
 }
 
 /**************************

@@ -35,6 +35,8 @@ struct Token {
 
 // 型情報. ptr/arrayはその先の型情報も必要なので、それをptr_toとして持つ
 // TODO ptr_toをofとかにrenameしたい
+// TODO: char* hoge[] のメモリ配置.(stringの場合はdataにおかれるからそこのアドレスの配列)
+// NOTE: string => ARRAY of CHAR ≒ PTR of CHAR
 typedef struct Type {
     enum { INT, CHAR, PTR, ARRAY } ty;
     struct Type*
@@ -50,7 +52,7 @@ struct LVar {
     int len;  // length of name
     int offset;  // 関数ごとの初期RSPまたはglobalの起点からのoffset.
                  // 変数が増えるにつれて値は大きくなる.
-                 // つまりstackの上に進む(stackの先頭からは遠ざかる)
+    // つまりstackの上に進む(stackの先頭からは遠ざかる)
     Type* type;
     enum { LOCAL, GLOBAL } kind;
     Node* init;  // 初期化式
@@ -108,9 +110,9 @@ typedef enum {
     ND_FOR,
     ND_FOR_LEFT,
     ND_FOR_RIGHT,
+
     ND_BLOCK,
     ND_FUNC_CALL,
-
     ND_FUNC_DEF,
     ND_ADDR,
     ND_DEREF,
@@ -154,7 +156,7 @@ Node* unary();
 Node* primary();
 Node* define_variable(Define* def, LVar** varlist);
 Node* variable(Token* tok);
-
+Node* local_variable_init(Node* node);
 Type* get_type(Node* node);
 int get_type_size(Type* type);
 Define* read_define_head();

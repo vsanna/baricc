@@ -44,7 +44,7 @@ void print_token(Token *tok) {
 
 void print_type(Type *type) {
     if (type == NULL) {
-        fprintf(stderr, "[DEBUG] type is null\n");
+        fprintf(stderr, "[DEBUG] type is null");
     } else {
         char *name;
         switch (type->ty) {
@@ -63,8 +63,15 @@ void print_type(Type *type) {
             default:
                 break;
         }
-        fprintf(stderr, "[DEBUG] type = %s\n", name);
+        fprintf(stderr, "[DEBUG] type = %s ", name);
     }
+
+    if (type && (type->ty == ARRAY || type->ty == PTR)) {
+        print_type(type->ptr_to);
+        return;
+    }
+
+    fprintf(stderr, "\n");
 }
 
 void print_node(Node *node) {

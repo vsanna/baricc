@@ -287,15 +287,20 @@ int test_array() {
     assert(3, *p + *(p + 1));
 }
 
-// TODO: fix
 int test_array_access() {
     int a[2];
     a[0] = 1;
     a[1] = 2;
     int *p;
     p = a;
-    // FIXME
     assert(3, p[0] + p[1]);
+
+    int b[2][3];
+    b[0][1] = 2;
+    b[1][2] = 3;
+    int **q;
+    q = b;
+    assert(5, q[0][1] + q[1][2]);
 }
 
 int test_global_variable() {
@@ -303,21 +308,21 @@ int test_global_variable() {
     assert(10, g_a);
 }
 
-// int test_char() {
-//     char x[3];
-//     x[0] = -1;
-//     x[1] = 2;
-//     int y;
-//     y = 4;
-//     assert(3, x[0] + y);
-//     assert(1, sizeof(x[0]));
-// }
+int test_char() {
+    char x[3];
+    x[0] = -1;
+    x[1] = 2;
+    int y;
+    y = 4;
+    assert(3, x[0] + y);
+    assert(1, sizeof(x[0]));
+}
 
-// int test_string() {
-//     char *a;
-//     a = "abcd";
-//     assert(97, a[0]);
-// }
+int test_string() {
+    char *a;
+    a = "abcd";
+    assert(97, a[0]);
+}
 
 // int test_gloval_variable_init() {
 //     assert(3, g_a_init3);
@@ -668,10 +673,10 @@ int main() {
     test_pointer_calc();
     test_sizeof();
     test_array();
-    // test_array_access();
-    test_global_variable();
-    // test_char();
-    // test_string();
+    test_array_access();
+    // test_global_variable();
+    test_char();
+    test_string();
     // test_gloval_variable_init();
     // test_local_variable_init();
     // test_struct();

@@ -10,7 +10,6 @@ static char* argreg2[] = {"di", "si", "dx", "cx", "r8w", "r9w"};
 static char* argreg4[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
 static char* argreg8[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 
-// TODO: ここが評価(コード生成)ロジックの中心なので別ファイルに後で移す.
 // 構文木からアセンブラを作るところまで一気に進める
 int if_id = 0;
 // NOTE: ここに手を加えるときには細心の注意を払う!
@@ -29,13 +28,14 @@ void gen(Node* node) {
             printf("  push %d\n", node->val);
             return;
         case ND_GVAR_DEF:
-            // TODO: 意味調べる. staticな場所からどれだけの場所を確保するか?
+            // TODO: .zeroの意味調べる.
+            // staticな場所からどれだけの場所を確保するか?
             printf("%s:\n", node->varname);
             printf("  .zero %d\n", node->varsize);
             return;
         case ND_GVAR:
         case ND_LVAR:
-            // 変数の評価 = 「値」をスタックにpush
+            // 変数の評価とは、「値」をスタックにpushすること.
 
             // 左辺値のアドレスをスタックの先頭にpushし、
             gen_val(node);
@@ -48,14 +48,14 @@ void gen(Node* node) {
                 return;
             }
 
-            // そのアドレスをraxにいれ
-            printf("  pop rax\n");
-
             /*
+            DEREF処理する. = アドレスの指す値に差し替えてpushする
             そのアドレスにある値をraxにいれる。
             指定したアドレスからデフォルトでは8個分のアドレスにある値をとってきてしまうので、
             必要な長さを指定する
             */
+            // そのアドレスをraxにいれ
+            printf("  pop rax\n");
             if (type && type->ty == CHAR) {
                 // TODO: what's this
                 printf("  movsx rax, BYTE PTR [rax]\n");
@@ -268,8 +268,8 @@ void gen(Node* node) {
             printf(".global %s\n", node->funcname);
             printf("%s:\n", node->funcname);
 
-            // プロローグ
             /*
+            // プロローグ
             ret address  <- (1) call直後のRSP
             caller's RBP <- (2) ましたの2命令が終わったあとのRSP, RBP
             arg0
@@ -305,7 +305,6 @@ void gen(Node* node) {
             gen(node->lhs);
 
             // エピローグ
-            // printf("  mov rax, 0\n");
             printf("  mov rsp, rbp\n");
             printf("  pop rbp\n");
             printf("  ret\n");
@@ -319,20 +318,21 @@ void gen(Node* node) {
             /*
             [アドレスの値]をpushした上で、それから値をとってきてpushし直す
             ND_LVARとほぼ同じ処理
-
-            ref: ND_LVARのgen
+            */
             // 左辺値のアドレスをスタックの先頭にpushし、
-            gen_val(node);
+            gen(node->lhs);
             // そのアドレスをraxにいれ
             printf("  pop rax\n");
             // そのアドレスにある値をraxにいれ、
-            printf("  mov rax, [rax]\n");
+            type = get_type(node);
+            if (type && type->ty == CHAR) {
+                printf("  movsx rax, BYTE PTR [rax]\n");
+            } else if (type && type->ty == INT) {
+                printf("  movsxd rax, DWORD PTR [rax]\n");
+            } else {
+                printf("  mov rax, [rax]\n");
+            }
             // その値をスタックの先頭にpush
-            printf("  push rax\n");
-            */
-            gen(node->lhs);
-            printf("  pop rax\n");
-            printf("  mov rax, [rax]\n");
             printf("  push rax\n");
             return;
     }

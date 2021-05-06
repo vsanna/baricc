@@ -437,13 +437,13 @@ Node* define_variable(Define* def, LVar** varlist) {
         Type* t;
         t = calloc(1, sizeof(Type));
         t->ty = ARRAY;
-        t->ptr_to = def->type;
+        t->ptr_to = type;
         t->array_size = expect_number();
 
         type = t;
         size *= t->array_size;
         expect("]");
-        // fprintf(stderr, "[DEBUG] arary size: %ld\n", type->array_size);
+        fprintf(stderr, "[DEBUG] arary size: %ld\n", type->array_size);
     }
 
     Node* node = new_node(ND_LVAR);
@@ -482,6 +482,9 @@ Node* define_variable(Define* def, LVar** varlist) {
 
 // TODO: これは本当? 外のscopeの値をそのまま利用 or
 // ウワがいてしまう
+// a[1] ==> *(a+1)
+// variable = ident ("[" num "]")?
+//            ^start
 Node* variable(Token* tok) {
     Node* node = new_node(ND_LVAR);
     LVar* lvar = find_variable(tok);
@@ -500,15 +503,41 @@ Node* variable(Token* tok) {
     node->varname = calloc(100, sizeof(char));
     memcpy(node->varname, tok->str, tok->len);
 
+    // もし a[1][2]のaがnodeとして渡ってきたなら、aのtypeは PTR of PTR of INT
+    // のはず
+
+    Type* tp = node->type;
+    bool has_index = false;
     while (consume("[")) {
+        has_index = true;
         // a[3] は *(a + 3) にする
+        // DEREF -- ADD -- a
+        //              -- MUL -- 3(expr)
+        //                     -- sizeof(a)
+
+        // 大きな1歩の中に小さな2歩
+        // (a + 1)はあどれすで、[a + 1]が示す値もアドレス
+        // int a[n][m]; にたいして、 a[1][2]を取得するには
+        // DEREF( (a + sizeof(int * m: 1行のsize) * 1) + sizeof(int:
+        // 1cellのサイズ) * 2 ) 最後にだけderefする
         Node* add = new_node(ND_ADD);
-        add->lhs = node;
-        add->rhs = expr();
-        node = new_node(ND_DEREF);
-        node->lhs = add;
+        add->lhs = node;  // 変数
+
+        Node* index_val = new_num(expect_number());
+
+        // NOTE:
+        // ここのtype_sizeでみるのは要素のサイズなので常にptr_to一個先をみる
+        add->rhs =
+            new_binary(ND_MUL, index_val, new_num(get_type_size(tp->ptr_to)));
+        tp = tp->ptr_to;
         // TODO: node(ND_LVAR)のtypeが配列のままなのにptrになっちゃってない?
+        node = add;
         expect("]");
+    }
+    if (has_index) {
+        Node* deref_node = new_node(ND_DEREF);
+        deref_node->lhs = node;
+        node = deref_node;
     }
 
     return node;
@@ -557,6 +586,7 @@ Type* get_type(Node* node) {
     }
 
     // DEREFの場合はとってきたtypeの指す先を返す(型のderef)
+    // TODO: ココよく理解する
     if (t && node->kind == ND_DEREF) {
         t = t->ptr_to;
         if (t == NULL) {

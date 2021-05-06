@@ -23,6 +23,7 @@ typedef enum {
     TK_STRING,
 } TokenKind;
 
+typedef struct Node Node;
 typedef struct Token Token;
 struct Token {
     TokenKind kind;  // トークンの種別
@@ -115,8 +116,6 @@ typedef enum {
     ND_DEREF,
     ND_STRING,
 } NodeKind;
-
-typedef struct Node Node;
 
 struct Node {
     NodeKind kind;

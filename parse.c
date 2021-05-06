@@ -352,7 +352,7 @@ Node* unary() {
 //           | ident ("(" (expr ",")* ")")?
 //           | "(" expr ")"
 //           | '""string'"'
-//           | number
+// TODO: primaryにexpr入れたくない
 Node* primary() {
     // 次のトークンが ( なら ( expr ) のハズ
     if (consume("(")) {
@@ -407,10 +407,6 @@ Node* primary() {
     return new_num(expect_number());
 }
 
-// initialize_variable
-//   = type-annotation ident ("[" number? "]"")? "=" expr ";"
-Node* initialize_variable() {}
-
 // stmtの一つ. 変数を宣言する.
 // ND_LVARを返しつつ、LVarを作ってlocalsに追加する
 // TODO: これは意味解析も一緒にやっちゃってないか? それはいいの?
@@ -446,10 +442,30 @@ Node* define_variable(Define* def, LVar** varlist) {
         fprintf(stderr, "[DEBUG] arary size: %ld\n", type->array_size);
     }
 
-    // if it has initialize expression
-    Node* init;
+    Node* init = NULL;
     if (consume("=")) {
-        init = expr();
+        /*
+        TODO: なぜassignにせずにinitをもたせる形にしたのか...
+        なぜならアセンブラとして吐き出したいコードがぜんぜん違うから。
+        - assign: 左辺のアドレスをpush -> 右辺を評価 -> 右辺の値をpush -> 左辺のアドレスに右辺の値をmov
+        - globalのinit: .data領域に書き込み
+        - localのinit: assignとして扱ってもOK.(のハズ)
+        */
+        if (consume("{")) {
+            // TODO 最大100要素まで
+            init = calloc(1, sizeof(Node));
+            init->block = calloc(100, sizeof(Node));
+            for (int i = 0; !consume("}"); i++) {
+                if (i != 0) {
+                    expect(",");
+                }
+
+                init->block[i] = expr();
+            }
+        } else if (consume('"')) {
+        } else {
+            init = expr();
+        }
     }
 
     Node* node = new_node(ND_LVAR);
@@ -486,7 +502,7 @@ Node* define_variable(Define* def, LVar** varlist) {
     node->offset = varlist[scope_depth]->offset;
     node->type = type;
     node->kind = (var->kind == LOCAL) ? ND_LVAR : ND_GVAR;
-    node->var = var;  // TODO: assignのNODEにして返すのが良くない?
+    node->var = var;
     return node;
 }
 

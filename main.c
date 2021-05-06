@@ -25,38 +25,43 @@ int main(int argc, char** argv) {
     // アセンブリの前半を出力
     printf(".intel_syntax noprefix\n");
 
+    // TODO: .bssを調べる
+    // .bss
+    // 初期化式のないグローバル変数
     printf(".bss\n");  // TODO: what's this
-
-    // codeのstmtがある限りすすめる
-    // まず変数定義
     for (int i = 0; code[i]; i++) {
         if (code[i]->kind == ND_GVAR_DEF) {
-            // fprintf(stderr, "[DEBUG]: %s\n", code[i]->varname);
-            gen(code[i]);
+            if (code[i]->var->init == NULL) {
+                gen(code[i]);
+            }
         }
     }
 
-    // TODO:
-    // .LC0 :
-    //   .string "hello"
-    // name :
-    //   .quad .LC0
     // TODO: .dataを調べる
+    // .data
+    // 初期化式のあるグローバル変数
     printf(".data\n");
     for (StringToken* str = strings; str; str = str->next) {
         printf(".LC%d:\n", str->index);
         printf("  .string \"%s\"\n", str->value);
     }
+    for (int i = 0; code[i]; i++) {
+        if (code[i]->kind == ND_GVAR_DEF) {
+            if (code[i]->var->init != NULL) {
+                gen(code[i]);
+            }
+        }
+    }
 
+    // TODO: what's this
+    // .text
     // つづいて関数定義
-    printf(".text\n");  // TODO: what's this
+    printf(".text\n");
     printf(".globl main\n");
-    // 定義した順番にgenしていく
     cur_scope_depth = 0;
     for (int i = 0; code[i]; i++) {
         if (code[i]->kind == ND_FUNC_DEF) {
             cur_scope_depth++;
-            // fprintf(stderr, "[DEBUG]: %s\n", code[i]->funcname);
             gen(code[i]);
         }
     }

@@ -28,17 +28,67 @@ void gen(Node* node) {
             printf("  push %d\n", node->val);
             return;
         case ND_GVAR_DEF:
+            /*
+                int a = 3;
+                char b[] = "foobar";
+                int *c = &a;
+                char *d = b + 3;
+
+                a:
+                .long 3
+                b:
+                .byte 0x66 // 'f'
+                .byte 0x6f // 'o'
+                .byte 0x6f // 'o'
+                .byte 0x62 // 'b'
+                .byte 0x61 // 'a'
+                .byte 0x72 // 'r'
+                .byte 0    // '\0'
+                c:
+                .quad a
+                d:
+                .quad b + 3
+            */
             // TODO: .zeroの意味調べる.
             // staticな場所からどれだけの場所を確保するか?
             printf("%s:\n", node->varname);
 
-            // if node doesn't have init
-            if (!node->var->init) {
-                // TODO: val(即値)が入ってくる前提
-                print("  .long %d\n", node->var->init->val);
+            if (node->var->init == NULL) {
+                printf("  .zero %d\n", node->varsize);
                 return;
             }
-            printf("  .zero %d\n", node->varsize);
+
+            if (node->type->ty == ARRAY) {
+                for (int i = 0; node->var->init->block[i]; i++) {
+                    switch (node->type->ptr_to->ty) {
+                        case INT:
+                            // %x: 16進数表記
+                            printf("  .long 0x%x\n",
+                                   node->var->init->block[i]->val);
+                            break;
+                        case CHAR:
+                            printf("  .byte 0x%x\n",
+                                   node->var->init->block[i]->val);
+                            break;
+                        case ARRAY:
+                            // TODO
+                        case PTR:
+                            // TODO
+                        default:
+                            break;
+                    }
+                }
+                return;
+            }
+
+            // string単体の場合
+            if (node->var->init->kind == ND_STRING) {
+                printf("  .quad .LC%d\n", node->var->init->string->index);
+                return;
+            }
+
+            // int 単体の場合
+            printf("  .long %d\n", node->var->init->val);
             return;
         case ND_GVAR:
         case ND_LVAR:
@@ -260,9 +310,8 @@ void gen(Node* node) {
             printf("  call %s\n", node->funcname);
             printf("  jmp .L.end.%03d\n", id);
             printf(".L.call.%03d:\n", id);
-            printf(
-                "  sub rsp, 8\n");  // TODO:
-                                    // rspの値が16の倍数でないとき、8をひけばいいだけ?
+            printf("  sub rsp, 8\n");  // TODO:
+            // rspの値が16の倍数でないとき、8をひけばいいだけ?
             printf("  mov rax, 0\n");  // ALを0クリアして可変長引数に対応する.
                                        // TODO: なにそれ
             printf("  call %s\n", node->funcname);

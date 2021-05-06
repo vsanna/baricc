@@ -418,9 +418,9 @@ Node* initialize_variable() {}
 // 同一scopeで見つかったらエラーみたいなことをするにはまたロジックを考える必要がある
 // TODO: block切って同名/別型変数を宣言したときに既存言語でエラーになるかどうか
 // NOTE: 型宣言の最初にいる状態で呼ばれる. *とidentの処理を行う
-// define_variable = "int" "*"* ident
+// define_variable = "int" "*"* ident ("=" 初期化式)
 //                                    ^start/end
-//                 | "int" "*"* ident "[" number "]"
+//                 | "int" "*"* ident "[" number "]" ("=" 初期化式)
 //                                    ^start        ^end
 Node* define_variable(Define* def, LVar** varlist) {
     if (def == NULL) {
@@ -446,6 +446,12 @@ Node* define_variable(Define* def, LVar** varlist) {
         fprintf(stderr, "[DEBUG] arary size: %ld\n", type->array_size);
     }
 
+    // if it has initialize expression
+    Node* init;
+    if (consume("=")) {
+        init = expr();
+    }
+
     Node* node = new_node(ND_LVAR);
     LVar* var = find_variable(tok);
 
@@ -465,18 +471,22 @@ Node* define_variable(Define* def, LVar** varlist) {
     var->len = tok->len;
     var->type = type;
     var->kind = (varlist == locals) ? LOCAL : GLOBAL;
+    var->init = init;
 
-    if (varlist[cur_scope_depth] == NULL) {
+    // TODO: きれいにする
+    int scope_depth = varlist == locals ? cur_scope_depth : 0;
+    if (varlist[scope_depth] == NULL) {
         var->offset = size;
     } else {
-        var->offset = varlist[cur_scope_depth]->offset + size;
+        var->offset = varlist[scope_depth]->offset + size;
     }
-    varlist[cur_scope_depth] = var;
+    varlist[scope_depth] = var;
 
     // nodeを完成させる
-    node->offset = varlist[cur_scope_depth]->offset;
+    node->offset = varlist[scope_depth]->offset;
     node->type = type;
     node->kind = (var->kind == LOCAL) ? ND_LVAR : ND_GVAR;
+    node->var = var;  // TODO: assignのNODEにして返すのが良くない?
     return node;
 }
 

@@ -31,6 +31,13 @@ void gen(Node* node) {
             // TODO: .zeroの意味調べる.
             // staticな場所からどれだけの場所を確保するか?
             printf("%s:\n", node->varname);
+
+            // if node doesn't have init
+            if (!node->var->init) {
+                // TODO: val(即値)が入ってくる前提
+                print("  .long %d\n", node->var->init->val);
+                return;
+            }
             printf("  .zero %d\n", node->varsize);
             return;
         case ND_GVAR:

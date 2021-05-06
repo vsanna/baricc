@@ -1,7 +1,7 @@
 
 int g_a;
 // int g_b[10];
-// int g_a_init3 = 3;
+int g_a_init3 = 3;
 // int g_array[5] = {0, 1, 2, 3, 4};
 // char g_array2[5] = {5, 6, 7, 8, 12};
 // char *g_msg1 = "foo";
@@ -324,21 +324,21 @@ int test_string() {
     assert(97, a[0]);
 }
 
-// int test_gloval_variable_init() {
-//     assert(3, g_a_init3);
+int test_gloval_variable_init() {
+    assert(3, g_a_init3);
 
-//     assert(0, g_array[0]);
-//     assert(4, g_array[4]);
+    // assert(0, g_array[0]);
+    // assert(4, g_array[4]);
 
-//     assert(5, g_array2[0]);
-//     assert(12, g_array2[4]);
+    // assert(5, g_array2[0]);
+    // assert(12, g_array2[4]);
 
-//     assert(102, g_msg1[0]);
-//     assert(111, g_msg1[2]);
+    // assert(102, g_msg1[0]);
+    // assert(111, g_msg1[2]);
 
-//     assert(98, g_msg2[0]);
-//     assert(114, g_msg2[2]);
-// }
+    // assert(98, g_msg2[0]);
+    // assert(114, g_msg2[2]);
+}
 
 // int test_local_variable_init() {
 //     int a = 10;

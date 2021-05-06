@@ -52,6 +52,7 @@ struct LVar {
                  // つまりstackの上に進む(stackの先頭からは遠ざかる)
     Type* type;
     enum { LOCAL, GLOBAL } kind;
+    Node* init;  // 初期化式
 };
 
 LVar* find_variable(Token* tok);
@@ -130,6 +131,7 @@ struct Node {
     char* varname;        // used when kind == ND_GVAR, ND_LVAR
     int varsize;          // used when kind == ND_GVAR, ND_LVAR Byte.
     StringToken* string;  // used when kind == ND_STRING
+    LVar* var;            // used when kind == ND_LVAR, ND_GVAR_DEF
 };
 
 Node* new_node(NodeKind kind);

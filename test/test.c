@@ -295,7 +295,7 @@ int test_array_access() {
     int *p;
     p = a;
     // FIXME
-    // assert(3, p[0] + p[1]);
+    assert(3, p[0] + p[1]);
 }
 
 int test_global_variable() {

@@ -398,13 +398,13 @@ int test_struct() {
     assert(30, abc.ccc);
     assert(30, abc.aaa + abc.bbb);
 
-    // struct StTest {
-    //     int a;
-    //     char b;
-    //     int c;
-    // } ccc;
-    // int size = &ccc.c - &ccc.a;
-    // assert(8, size);
+    struct StTest {
+        int a;
+        char b;
+        int c;
+    } ccc;
+    int size = &ccc.c - &ccc.a;
+    assert(8, size);
 
     // struct StTest ccc2;
     // int size2 = &ccc2.c - &ccc2.a;

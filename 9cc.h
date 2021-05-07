@@ -55,6 +55,7 @@ struct Type {
         ptr_to;  // used when ty == PTR, ARRAY. 指し示す先の変数の型を持つ
     size_t array_size;
     Member* members;
+    int size;
 };
 
 // local variables(LinkedList)
@@ -131,6 +132,7 @@ typedef enum {
     ND_ADDR,
     ND_DEREF,
     ND_STRING,
+    ND_MEMBER,  // a.b のdot
 } NodeKind;
 
 struct Node {
@@ -147,6 +149,7 @@ struct Node {
     int varsize;          // used when kind == ND_GVAR, ND_LVAR Byte.
     StringToken* string;  // used when kind == ND_STRING
     LVar* var;            // used when kind == ND_LVAR, ND_GVAR_DEF
+    Member* member;       // used when kind == ND_MEMBER
 };
 
 Node* new_node(NodeKind kind);
@@ -177,6 +180,7 @@ Define* read_define_head();
 void read_define_suffix(Define* def);
 Type* type_annotation();
 Type* define_struct();
+Member* find_member(Token* tok, Type* type);
 
 // 構文木からアセンブラを作るところまで一気に進める
 void gen(Node* node);

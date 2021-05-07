@@ -115,6 +115,7 @@ void gen(Node* node) {
             // int 単体の場合
             printf("  .long 0x%x\n", node->var->init->val);
             return;
+        case ND_MEMBER:
         case ND_GVAR:
         case ND_LVAR:
             // 変数の評価とは、「値」をスタックにpushすること.
@@ -169,6 +170,7 @@ void gen(Node* node) {
             8B未満のデータの配列を連続して書き込む場合はそれだと不要な書き込みが発生するので、
             レジスタの下位Nbitだけを書き込むことをaliasを用いて指定する
             */
+
             if (type && type->ty == CHAR) {
                 // NOTE: dil = rdiの下位8bitのalias
                 printf("mov [rax], dil\n");
@@ -365,6 +367,27 @@ void gen(Node* node) {
             if (locals[cur_scope_depth]) {
                 int offset = locals[cur_scope_depth]->offset;
                 printf("  sub rsp, %d\n", offset);
+
+                // fprintf(stderr, "[DEBUG] func def(%s) offset: %d\n",
+                //         node->funcname, locals[cur_scope_depth]->offset);
+                // for (LVar* lvar = locals[cur_scope_depth]; lvar;
+                //      lvar = lvar->next) {
+                //     char* tmp[100] = {0};
+                //     memcpy(tmp, lvar->name, lvar->len);
+                //     if (lvar->type->ty == STRUCT) {
+                //         for (Member* m = lvar->type->members; m; m = m->next) {
+                //             fprintf(stderr,
+                //                     "        [DEBUG] func def(%s): var(%s): "
+                //                     "member(%s) offset: %d\n",
+                //                     node->funcname, tmp, m->name, m->offset);
+                //         }
+                //     } else {
+                //         fprintf(
+                //             stderr,
+                //             "    [DEBUG] func def(%s): var(%s) offset: %d\n",
+                //             node->funcname, tmp, lvar->offset);
+                //     }
+                // }
             }
 
             // call-funcした際にABI指定のregisterに保存した引数を
@@ -494,6 +517,12 @@ void gen_val(Node* node) {
         printf("  push rax\n");
     } else if (node->kind == ND_GVAR) {
         printf("  push offset %s\n", node->varname);
+    } else if (node->kind == ND_MEMBER) {
+        // memberのoffsetをaddする
+        gen_val(node->lhs);
+        printf("  pop rax\n");
+        printf("  add rax, %d\n", node->member->offset);
+        printf("  push rax\n");
     } else {
         error("not variable");
     }

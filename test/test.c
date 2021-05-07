@@ -382,32 +382,38 @@ int test_local_variable_init() {
     assert(102, def[2]);
 }
 
-// int test_struct() {
-// struct {
-//     int a;
-//     int b;
-// } abc;
-// abc.a = 10;
-// abc.b = 20;
-// assert(10, abc.a);
-// assert(20, abc.b);
+int test_struct() {
+    // struct {} で一つの型
+    struct {
+        int aaa;
+        int bbb;
+        int ccc;
+    } abc;
+    // TODO: abc.aaaが20になるのをなおすところから。offsetか~?
+    abc.aaa = 10;
+    abc.bbb = 20;
+    abc.ccc = 30;
+    assert(10, abc.aaa);
+    assert(20, abc.bbb);
+    assert(30, abc.ccc);
+    assert(30, abc.aaa + abc.bbb);
 
-// struct StTest {
-//     int a;
-//     char b;
-//     int c;
-// } ccc;
-// int size = &ccc.c - &ccc.a;
-// assert(8, size);
+    // struct StTest {
+    //     int a;
+    //     char b;
+    //     int c;
+    // } ccc;
+    // int size = &ccc.c - &ccc.a;
+    // assert(8, size);
 
-// struct StTest ccc2;
-// int size2 = &ccc2.c - &ccc2.a;
-// assert(8, size2);
+    // struct StTest ccc2;
+    // int size2 = &ccc2.c - &ccc2.a;
+    // assert(8, size2);
 
-// ccc2.a = 7;
-// struct StTest *ptr = &ccc2;
-// assert(7, ptr->a);
-// }
+    // ccc2.a = 7;
+    // struct StTest *ptr = &ccc2;
+    // assert(7, ptr->a);
+}
 
 // int test_typedef() {
 //     Int b;
@@ -689,7 +695,7 @@ int main() {
     test_string();
     test_gloval_variable_init();
     test_local_variable_init();
-    // test_struct();
+    test_struct();
     // test_typedef();
     // test_enum();
     // test_break();

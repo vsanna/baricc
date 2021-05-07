@@ -79,23 +79,29 @@ void program() {
 
 // 各structごとにlocalsを設けてあげる
 // NOTE: struct自体は何かをアセンブラに吐き出すわけではない(compilerだけが持つ情報)なのでnode不要
-// define_struct = "struct" tag(ident)? "{" (define_variable ";")* "}" alias(ident)? ";"
+// define_struct = "struct" tag(ident)? "{" (define_variable ";")* "}" alias(ident)?
 //                          ^start
 Type* define_struct() {
     if (!consume_kind(TK_STRUCT)) {
         return NULL;
     }
 
+    // TODO: read struct tag
+
     expect("{");
 
     Type* struct_type = calloc(1, sizeof(Type));
     struct_type->ty = STRUCT;
 
-    Member* members = calloc(1, sizeof(Member));
+    Member head;
+    Member* cur = &head;
+    //  = calloc(1, sizeof(Member));
 
     // TODO: tag名に対応
     // Token* name = consume_kind(TK_IDENT);
-
+    // TODO なにここのwhile
+    int offset = 0;
+    int maxSize = 0;
     while (!consume("}")) {
         // 型情報を取得し
         Define* def = read_define_head();
@@ -109,19 +115,37 @@ Type* define_struct() {
 
         //// type
         m->ty = def->type;
+        int size = get_type_size(def->type);
 
+        /*
         // TODO: 配列でうまく行かない?
-        int relative_offset = get_type_size(def->type);
-        if (struct_type->members) {
-            m->offset = members->offset + relative_offset;
-        } else {
-            m->offset = relative_offset;
+
+        struct {
+            int a;
+            char b;
+            int c;
         }
-        m->next = struct_type->members;
-        struct_type->members = m;
+
+        a: offset = 4
+        b: offset = 5
+        c: offset = 12
+        */
+        // TODO: ココを理解する
+        offset = align_to(offset, size);
+        m->offset = offset;
+        offset += size;
+        cur->next = m;
+        cur = m;
+
+        // TODO: なにこれ
+        if (maxSize <= 8 && maxSize <= size) {
+            maxSize = size;
+        }
     }
 
-    expect(";");
+    struct_type->members = head.next;
+    struct_type->size = align_to(offset, maxSize);
+
     return struct_type;
 }
 
@@ -485,8 +509,6 @@ Node* define_variable(Define* def, LVar** varlist) {
     Type* type = def->type;
     Token* tok = def->ident;
 
-    int size = get_type_size(type);
-
     Node* init = NULL;
     if (consume("=")) {
         /*
@@ -535,13 +557,7 @@ Node* define_variable(Define* def, LVar** varlist) {
             }
         }
     }
-
-    if (type->ty == ARRAY) {
-        if (type->array_size == 0) {
-            error("array size is not defined.\n");
-        }
-        size = get_type_size(type);
-    }
+    int size = get_type_size(type);
 
     Node* node = new_node(ND_LVAR);
     LVar* var = find_variable(tok);
@@ -661,14 +677,9 @@ Node* variable(Token* tok) {
     node->varname = calloc(100, sizeof(char));
     memcpy(node->varname, tok->str, tok->len);
 
-    // もし a[1][2]のaがnodeとして渡ってきたなら、aのtypeは PTR of PTR of INT
-    // のはず
-
-    // DEBUG
-    Node* original_node = node;
-
     Type* tp = node->type;
     bool has_index = false;
+    // TODO: 今はa.b[0].c[2][4] といった書き方ができない.
     while (consume("[")) {
         has_index = true;
         // a[3] は *(a + 3) にする
@@ -701,7 +712,34 @@ Node* variable(Token* tok) {
         node = deref_node;
     }
 
+    //
+    while (consume(".")) {
+        Node* member = new_node(ND_MEMBER);
+        member->lhs = node;
+        member->member = find_member(consume_kind(TK_IDENT), node->type);
+        member->type = member->member->ty;
+        node = member;
+        fprintf(stderr, "[DEBUG] member name: %s, offset: %d\n",
+                member->member->name, member->member->offset);
+    }
+
     return node;
+}
+
+Member* find_member(Token* tok, Type* type) {
+    if (tok == NULL) {
+        error("member ident must come here\n");
+    }
+    char* name[100];
+    memcpy(name, tok->str, tok->len);
+
+    for (Member* m = type->members; m; m = m->next) {
+        if (strcmp(name, m->name) == 0) {
+            return m;
+        }
+    }
+
+    error("member ident is not found\n");
 }
 
 // まずlocal変数を探してなければglobal変数を探す
@@ -849,6 +887,7 @@ int get_type_size(Type* type) {
         error("type should be non null");
     }
 
+    int size;
     switch (type->ty) {
         case INT:
             return 4;
@@ -857,30 +896,48 @@ int get_type_size(Type* type) {
         case CHAR:
             return 1;
         case ARRAY:
+            if (type->array_size == 0) {
+                error("array size is zero.");
+            }
             return get_type_size(type->ptr_to) * type->array_size;
+        case STRUCT:
+            // size = 0;
+            // for (Member* m = type->members; m; m = m->next) {
+            //     size += get_type_size(m->ty);
+            // }
+            // return size;
+            return type->size;
         default:
             error("unexpected Type->ty comes here\n");
     }
 }
 
-// type_annotation = ("int"|"char") "*"*
-// assume:  current token = ("int"|"char")
-// move to: current token = *の次
 // TODO: type_prefixにrenameしてtype_suffixと連動させる
-Type* type_annotation() {
-    Token* typeToken = consume_kind(TK_TYPE);
-    if (typeToken == NULL) {
-        return NULL;
+// 関数またはグローバル変数の定義の前半のみをreadする
+// その読んだ情報をDefineをcontainerとして流用してそこに詰めて返す
+// int** hoge までを読む.
+// type_annotation = ("int"|"char") "*"*
+// assume:  current token = int
+// move to: current token = ident
+Define* read_define_head() {
+    // read struct definition if possible
+    Type* type = define_struct();
+
+    // type "*"*
+    if (type == NULL) {
+        Token* typeToken = consume_kind(TK_TYPE);
+        if (typeToken == NULL) {
+            return NULL;
+        }
+
+        type = calloc(1, sizeof(Type));
+        int isChar = memcmp("char", typeToken->str, typeToken->len) == 0;
+
+        char* tmp[100] = {0};
+        memcpy(tmp, typeToken->str, typeToken->len);
+        type->ty = isChar ? CHAR : INT;
     }
 
-    Type* type = calloc(1, sizeof(Type));
-    int isChar = memcmp("char", typeToken->str, typeToken->len) == 0;
-
-    char* tmp[100] = {0};
-    memcpy(tmp, typeToken->str, typeToken->len);
-    type->ty = isChar ? CHAR : INT;
-
-    // ここで*を読む
     while (consume("*")) {
         Type* t = calloc(1, sizeof(Type));
         t->ty = PTR;
@@ -888,17 +945,6 @@ Type* type_annotation() {
         type = t;
     }
 
-    return type;
-}
-
-// 関数またはグローバル変数の定義の前半のみをreadする
-// その読んだ情報をDefineをcontainerとして流用してそこに詰めて返す
-// int** hoge までを読む.
-// assume:  current token = int
-// move to: current token = ident
-Define* read_define_head() {
-    // read type "*"*
-    Type* type = type_annotation();
     if (type == NULL) {
         return NULL;
     }
@@ -942,8 +988,10 @@ void read_define_suffix(Define* def) {
 
         type = t;
         expect("]");
-        fprintf(stderr, "[DEBUG] arary size: %ld\n", type->array_size);
     }
 
     def->type = type;
 }
+
+// TODO: ココを理解
+int align_to(int n, int align) { return (n + align - 1) & ~(align - 1); }

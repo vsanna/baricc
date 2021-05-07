@@ -7,6 +7,8 @@ int g_array[5] = {0, 1, 2, 3, 4};
 char g_array2[5] = {5, 6, 7, 8, 12};
 char *g_msg1 = "foo";
 char g_msg2[4] = "bar";
+
+// TODO: stringのarrayはまだ未対応
 // char *g_strings[] = {"abc", "def"};
 
 // struct Hoge {
@@ -50,7 +52,6 @@ int assert(int expected, int actual) {
 }
 
 int fail() {
-    // TODO: ここのdebugから。10文字まではうごく
     printf("called failed!");
     exit(1);
 }
@@ -359,7 +360,10 @@ int test_local_variable_init() {
     assert(2, c[1]);
 
     assert(5, d[0]);
-    assert(0, d[1]);
+    assert(0, d[1]);  // ここ
+    assert(0, d[2]);  // ここ
+    assert(0, d[3]);  // ここ
+    assert(0, d[4]);  // ここ
 
     assert(3, e[0]);
     assert(5, e[2]);
@@ -370,37 +374,39 @@ int test_local_variable_init() {
     char def[] = "def";
 
     assert(97, abc[0]);
+    assert(98, abc[1]);
     assert(99, abc[2]);
 
     assert(100, def[0]);
+    assert(101, def[1]);
     assert(102, def[2]);
 }
 
 // int test_struct() {
-//     struct {
-//         int a;
-//         int b;
-//     } abc;
-//     abc.a = 10;
-//     abc.b = 20;
-//     assert(10, abc.a);
-//     assert(20, abc.b);
+// struct {
+//     int a;
+//     int b;
+// } abc;
+// abc.a = 10;
+// abc.b = 20;
+// assert(10, abc.a);
+// assert(20, abc.b);
 
-//     struct StTest {
-//         int a;
-//         char b;
-//         int c;
-//     } ccc;
-//     int size = &ccc.c - &ccc.a;
-//     assert(8, size);
+// struct StTest {
+//     int a;
+//     char b;
+//     int c;
+// } ccc;
+// int size = &ccc.c - &ccc.a;
+// assert(8, size);
 
-//     struct StTest ccc2;
-//     int size2 = &ccc2.c - &ccc2.a;
-//     assert(8, size2);
+// struct StTest ccc2;
+// int size2 = &ccc2.c - &ccc2.a;
+// assert(8, size2);
 
-//     ccc2.a = 7;
-//     struct StTest *ptr = &ccc2;
-//     assert(7, ptr->a);
+// ccc2.a = 7;
+// struct StTest *ptr = &ccc2;
+// assert(7, ptr->a);
 // }
 
 // int test_typedef() {
@@ -658,7 +664,7 @@ int test_local_variable_init() {
 //     assert(40, f[1][0][1].a);
 // }
 
-int func() { return 1; }
+// int func() { return 1; }
 
 int main() {
     test_calc();

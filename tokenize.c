@@ -93,7 +93,8 @@ typedef struct ReservedWord {
 ReservedWord reserved_words[] = {
     {"return", TK_RETURN}, {"if", TK_IF},         {"else", TK_ELSE},
     {"while", TK_WHILE},   {"for", TK_FOR},       {"int", TK_TYPE},
-    {"char", TK_TYPE},     {"sizeof", TK_SIZEOF}, {"", TK_EOF},
+    {"char", TK_TYPE},     {"sizeof", TK_SIZEOF}, {"struct", TK_STRUCT},
+    {"", TK_EOF},
 };
 
 // 入力文字列pをトークない頭してそれを返す

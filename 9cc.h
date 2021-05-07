@@ -21,10 +21,14 @@ typedef enum {
     TK_TYPE,  // type annotation
     TK_SIZEOF,
     TK_STRING,
+    TK_STRUCT,
 } TokenKind;
 
 typedef struct Node Node;
 typedef struct Token Token;
+typedef struct Type Type;
+typedef struct Member Member;
+
 struct Token {
     TokenKind kind;  // トークンの種別
     Token* next;     // 次の入力トークン
@@ -33,16 +37,25 @@ struct Token {
     int len;  // トークンの長さ(lenを追加するまでは1文字の前提だった)
 };
 
+struct Member {
+    Member* next;
+    Type* ty;
+    char* name;
+    int offset;
+};
+
 // 型情報. ptr/arrayはその先の型情報も必要なので、それをptr_toとして持つ
 // TODO ptr_toをofとかにrenameしたい
 // TODO: char* hoge[] のメモリ配置.(stringの場合はdataにおかれるからそこのアドレスの配列)
 // NOTE: string => ARRAY of CHAR ≒ PTR of CHAR
-typedef struct Type {
-    enum { INT, CHAR, PTR, ARRAY } ty;
+typedef enum { INT, CHAR, PTR, ARRAY, STRUCT } TypeKind;
+struct Type {
+    TypeKind ty;
     struct Type*
         ptr_to;  // used when ty == PTR, ARRAY. 指し示す先の変数の型を持つ
     size_t array_size;
-} Type;
+    Member* members;
+};
 
 // local variables(LinkedList)
 typedef struct LVar LVar;
@@ -86,6 +99,7 @@ Token* new_token(TokenKind kind, Token* cur, char* str, int len);
 bool startswith(char* p, char* q);
 Token* tokenize();
 void register_lval(Token* tok, Type* type);
+
 // codegen
 // 抽象構文木のノードの種類
 typedef enum {
@@ -160,7 +174,9 @@ Node* local_variable_init(Node* node);
 Type* get_type(Node* node);
 int get_type_size(Type* type);
 Define* read_define_head();
+void read_define_suffix(Define* def);
 Type* type_annotation();
+Type* define_struct();
 
 // 構文木からアセンブラを作るところまで一気に進める
 void gen(Node* node);

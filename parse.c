@@ -6,6 +6,8 @@ LVar* locals[100];
 LVar* globals[100];  // TODO: 配列でなくてよい
 int cur_scope_depth = 0;
 StringToken* strings;
+Type* structs[100];  // TODO: at most 100 struct defs
+int struct_def_index = 0;
 
 /**************************
  * node builder
@@ -44,7 +46,7 @@ Node* code[100];
 /**************************
  * parse functions
  * *************************/
-// program = (func_def | define_variable ";")*
+// program = (func_def | define_variable ";" | "struct" truct_def ";")*
 // programをまずは関数の束とする
 void program() {
     int i = 0;
@@ -57,6 +59,11 @@ void program() {
         if (consume("(")) {
             // 関数定義
             code[i] = func_def(def);
+            // } else if (consume_kind(TK_STRUCT)) {
+            //     // struct 定義. これはcompilerじにのみ保持する情報なのでnodeは返さない
+            //     structs[struct_def_index] = define_struct();
+            //     struct_def_index++;
+            //     continue;
         } else {
             // global変数の定義
             Node* gvar = define_variable(def, globals);
@@ -68,6 +75,54 @@ void program() {
         i++;
     }
     code[i] = NULL;
+}
+
+// 各structごとにlocalsを設けてあげる
+// NOTE: struct自体は何かをアセンブラに吐き出すわけではない(compilerだけが持つ情報)なのでnode不要
+// define_struct = "struct" tag(ident)? "{" (define_variable ";")* "}" alias(ident)? ";"
+//                          ^start
+Type* define_struct() {
+    if (!consume_kind(TK_STRUCT)) {
+        return NULL;
+    }
+
+    expect("{");
+
+    Type* struct_type = calloc(1, sizeof(Type));
+    struct_type->ty = STRUCT;
+
+    Member* members = calloc(1, sizeof(Member));
+
+    // TODO: tag名に対応
+    // Token* name = consume_kind(TK_IDENT);
+
+    while (!consume("}")) {
+        // 型情報を取得し
+        Define* def = read_define_head();
+        read_define_suffix(def);
+        expect(";");
+        // membersにつめる
+        //// name
+        Member* m = calloc(1, sizeof(Member));
+        m->name = calloc(100, sizeof(char));
+        memcpy(m->name, def->ident->str, def->ident->len);
+
+        //// type
+        m->ty = def->type;
+
+        // TODO: 配列でうまく行かない?
+        int relative_offset = get_type_size(def->type);
+        if (struct_type->members) {
+            m->offset = members->offset + relative_offset;
+        } else {
+            m->offset = relative_offset;
+        }
+        m->next = struct_type->members;
+        struct_type->members = m;
+    }
+
+    expect(";");
+    return struct_type;
 }
 
 // func_def = type-annotation ident "(" ("int" ident ("," "int" ident)*)? ")"
@@ -425,29 +480,12 @@ Node* define_variable(Define* def, LVar** varlist) {
         error("invalid definition of function or variable");
     }
 
+    read_define_suffix(def);
+
     Type* type = def->type;
     Token* tok = def->ident;
 
     int size = get_type_size(type);
-
-    // check if it's array or not;
-    while (consume("[")) {
-        Type* t;
-        t = calloc(1, sizeof(Type));
-        t->ty = ARRAY;
-        t->ptr_to = type;
-
-        // size of array is optional.
-        t->array_size = 0;
-        Token* num = NULL;
-        if (num = consume_kind(TK_NUM)) {
-            t->array_size = num->val;
-        }
-
-        type = t;
-        expect("]");
-        fprintf(stderr, "[DEBUG] arary size: %ld\n", type->array_size);
-    }
 
     Node* init = NULL;
     if (consume("=")) {
@@ -479,15 +517,18 @@ Node* define_variable(Define* def, LVar** varlist) {
                 type->array_size = i;
             }
 
+            // int a[5] = {5} のとき
+            // この時点で i = 1
+            // array_size = 5
+
             // 不足分の要素を埋める
-            i++;
             for (; i < type->array_size; i++) {
                 init->block[i] = new_num(0);
             }
         } else {
             init = expr();
             if (init->kind == ND_STRING) {
-                int len = type->array_size = strlen(init->string->value) + 1;
+                int len = strlen(init->string->value) + 1;
                 if (type->array_size < len) {
                     type->array_size = len;
                 }
@@ -499,7 +540,7 @@ Node* define_variable(Define* def, LVar** varlist) {
         if (type->array_size == 0) {
             error("array size is not defined.\n");
         }
-        size *= type->array_size;
+        size = get_type_size(type);
     }
 
     Node* node = new_node(ND_LVAR);
@@ -540,6 +581,63 @@ Node* define_variable(Define* def, LVar** varlist) {
     return node;
 }
 
+// Node* initializer(Type* type, int* size) {
+//     Node* init = NULL;
+//     if (consume("=")) {
+//         /*
+//         TODO: なぜassignにせずにinitをもたせる形にしたのか...
+//         なぜならアセンブラとして吐き出したいコードがぜんぜん違うから。
+//         - assign: 左辺のアドレスをpush -> 右辺を評価 -> 右辺の値をpush -> 左辺のアドレスに右辺の値をmov
+//         - globalのinit: .data領域に書き込み
+//         - localのinit: 初期化式でのみ使える表現がある. よってだめ.
+
+//         > 初期化式は一見ただの代入式のように見えますが、実際は初期化式と代入式は文法的にかなり異なっていて、
+//         > 初期化式だけに許された特別な書き方というものがいくつかあります。
+//         > ここでその特別な書き方をきちんと把握しておきましょう。
+//         */
+//         if (consume("{")) {
+//             // TODO 最大100要素まで
+//             init = calloc(1, sizeof(Node));
+//             init->block = calloc(100, sizeof(Node));
+//             int i = 0;
+//             for (; !consume("}"); i++) {
+//                 if (i != 0) {
+//                     expect(",");
+//                 }
+
+//                 init->block[i] = expr();
+//             }
+//             // 初期化子の数のほうがサイズよりも大きい場合はそちらでうわがく
+//             if (type->array_size < i) {
+//                 type->array_size = i;
+//             }
+
+//             // 不足分の要素を埋める
+//             i++;
+//             for (; i < type->array_size; i++) {
+//                 init->block[i] = new_num(0);
+//             }
+//         } else {
+//             init = expr();
+//             if (init->kind == ND_STRING) {
+//                 int len = type->array_size = strlen(init->string->value) + 1;
+//                 if (type->array_size < len) {
+//                     type->array_size = len;
+//                 }
+//             }
+//         }
+//     }
+
+//     if (type->ty == ARRAY) {
+//         if (type->array_size == 0) {
+//             error("array size is not defined.\n");
+//         }
+//         *size *= type->array_size;
+//     }
+
+//     return init;
+// }
+
 // TODO: これは本当? 外のscopeの値をそのまま利用 or
 // ウワがいてしまう
 // a[1] ==> *(a+1)
@@ -565,6 +663,9 @@ Node* variable(Token* tok) {
 
     // もし a[1][2]のaがnodeとして渡ってきたなら、aのtypeは PTR of PTR of INT
     // のはず
+
+    // DEBUG
+    Node* original_node = node;
 
     Type* tp = node->type;
     bool has_index = false;
@@ -748,7 +849,6 @@ int get_type_size(Type* type) {
         error("type should be non null");
     }
 
-    // print_type(type);
     switch (type->ty) {
         case INT:
             return 4;
@@ -766,6 +866,7 @@ int get_type_size(Type* type) {
 // type_annotation = ("int"|"char") "*"*
 // assume:  current token = ("int"|"char")
 // move to: current token = *の次
+// TODO: type_prefixにrenameしてtype_suffixと連動させる
 Type* type_annotation() {
     Token* typeToken = consume_kind(TK_TYPE);
     if (typeToken == NULL) {
@@ -814,4 +915,35 @@ Define* read_define_head() {
     def->ident = tok;
 
     return def;
+}
+
+// Defineのtypeに配列情報を付け加える. つまり型定義のsuffix部分をみる
+void read_define_suffix(Define* def) {
+    if (def == NULL) {
+        error("invalid definition of function or variable");
+    }
+
+    Type* type = def->type;
+    Token* tok = def->ident;
+
+    // check if it's array or not;
+    while (consume("[")) {
+        Type* t;
+        t = calloc(1, sizeof(Type));
+        t->ty = ARRAY;
+        t->ptr_to = type;
+
+        // size of array is optional.
+        t->array_size = 0;
+        Token* num = NULL;
+        if (num = consume_kind(TK_NUM)) {
+            t->array_size = num->val;
+        }
+
+        type = t;
+        expect("]");
+        fprintf(stderr, "[DEBUG] arary size: %ld\n", type->array_size);
+    }
+
+    def->type = type;
 }

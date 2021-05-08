@@ -450,6 +450,41 @@ Node* assign() {
 
     if (consume("=")) {
         node = new_binary(ND_ASSIGN, node, equality());
+        return node;
+    }
+
+    if (consume("+=")) {
+        Node* add = new_node(ND_ADD);
+        Node* right = equality();
+        add->lhs = node;
+        add->rhs = right;
+        node = new_binary(ND_ASSIGN, node, add);
+        return node;
+    }
+
+    if (consume("-=")) {
+        Node* sub = new_node(ND_SUB);
+        Node* right = equality();
+        sub->lhs = node;
+        sub->rhs = right;
+        node = new_binary(ND_ASSIGN, node, sub);
+        return node;
+    }
+    if (consume("*=")) {
+        Node* mul = new_node(ND_MUL);
+        Node* right = equality();
+        mul->lhs = node;
+        mul->rhs = right;
+        node = new_binary(ND_ASSIGN, node, mul);
+        return node;
+    }
+    if (consume("/=")) {
+        Node* div = new_node(ND_DIV);
+        Node* right = equality();
+        div->lhs = node;
+        div->rhs = right;
+        node = new_binary(ND_ASSIGN, node, div);
+        return node;
     }
 
     return node;

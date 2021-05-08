@@ -529,20 +529,20 @@ int test_continue() {
     assert(6, j);
 }
 
-// int test_addeq() {
-//     int i = 2;
-//     i += 5;
-//     assert(7, i);
+int test_addeq() {
+    int i = 2;
+    i += 5;
+    assert(7, i);
 
-//     i -= 3;
-//     assert(4, i);
+    i -= 3;
+    assert(4, i);
 
-//     i *= 2;
-//     assert(8, i);
+    i *= 2;
+    assert(8, i);
 
-//     i /= 2;
-//     assert(4, i);
-// }
+    i /= 2;
+    assert(4, i);
+}
 
 // int test_addeq_ptr() {
 //     int a[10] = {1, 2, 3, 4, 5};
@@ -739,7 +739,7 @@ int main() {
     test_enum();
     test_break();
     test_continue();
-    // test_addeq();
+    test_addeq();
     // test_addeq_ptr();
     // test_pp();
     // test_bit();

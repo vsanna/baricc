@@ -301,6 +301,7 @@ void gen(Node* node) {
             gen(node->rhs->rhs);
 
             // 後処理
+            // for内のcontinueは後処理から
             printf(".Lcontinue%d:\n", id);
             if (node->rhs->lhs != NULL) {
                 gen(node->rhs->lhs);

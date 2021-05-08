@@ -40,4 +40,17 @@ $ bash -x ./test.sh
 ```
 
 ## supported feature
+- 四則演算
+- ptr
+- array
+- enum
+- struct
+- break
+- continue
+
+
+
 - [ ] static
+- [ ] bit calcl: ! ~ | &
+- [ ] || &&
+

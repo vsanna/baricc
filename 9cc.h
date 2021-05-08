@@ -150,6 +150,7 @@ typedef enum {
     ND_DEREF,
     ND_STRING,
     ND_MEMBER,  // a.b のdot or a->b のarrow. ND_MEMBER_ACCESSのほうがいいな。
+    ND_BREAK,
 } NodeKind;
 
 struct Node {
@@ -235,4 +236,5 @@ extern LVar* globals[100];
 extern StringToken* strings;
 extern Tag* tags;
 extern EnumVar* enum_vars;
+extern int if_sequence;
 extern int break_sequence;

@@ -319,6 +319,8 @@ Node* func_def(Define* def) {
 //        | "for" "(" expr? ";" expr? ";" expr? ")" stmt
 //        | define_variable ";"
 //        | block
+//        | "break" ";"
+//        | "continue" ";"
 //        consume_kindココでしてるからそれもdefineにもってく
 Node* stmt() {
     Node* node;
@@ -393,6 +395,13 @@ Node* stmt() {
         return node;
     }
 
+    if (consume_kind(TK_BREAK)) {
+        Node* node = new_node(ND_BREAK);
+        expect(";");
+        return node;
+    }
+
+    // TODO: 上とstyle合わせたい
     Node* block_node = block();
     if (block_node != NULL) {
         return block_node;

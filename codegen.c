@@ -17,6 +17,7 @@ int break_sequence = 0;
 // 出力されたアセンブラをみてどこがおかしいかを把握するのは至難
 void gen(Node* node) {
     int id = if_sequence;
+    int original_brk = 0;
     int num_args = 0;
     Type* type;
 
@@ -193,6 +194,12 @@ void gen(Node* node) {
             printf("  pop rbp\n");
             printf("  ret\n");
             return;
+        case ND_BREAK:
+            if (break_sequence == 0) {
+                error("currently not in for, while");
+            }
+            printf("  jmp .Lend%d\n", break_sequence);
+            return;
         case ND_IF:
             if_sequence++;
             // lhs: cond
@@ -204,7 +211,6 @@ void gen(Node* node) {
             // lhs(=cond)の結果が0(=false)だったらjump
             // つまりjump先がalt
             printf("  cmp rax, 0\n");
-            // TODO: xxxが重複しないようにする
             printf("  je .Lelse%d\n", id);
 
             if (node->rhs->kind == ND_ELSE) {
@@ -221,10 +227,11 @@ void gen(Node* node) {
             }
 
             printf(".Lend%d:\n", id);
-
             return;
         case ND_WHILE:
             if_sequence++;
+            original_brk = break_sequence;
+            break_sequence = id;
             /*
             [cond]
             je end
@@ -239,9 +246,12 @@ void gen(Node* node) {
             gen(node->rhs);
             printf("  jmp .Lbegin%d\n", id);
             printf(".Lend%d:\n", id);
+            break_sequence = original_brk;
             return;
         case ND_FOR:
             if_sequence++;
+            original_brk = break_sequence;
+            break_sequence = id;
             /*
             Aをコンパイルしたコード
             .LbeginXXX:
@@ -280,8 +290,8 @@ void gen(Node* node) {
 
             printf("  jmp .Lbegin%d\n", id);
             printf(".Lend%d:\n", id);
+            break_sequence = original_brk;
             return;
-
         case ND_BLOCK:
             for (int i = 0; node->block[i] != NULL; i++) {
                 gen(node->block[i]);

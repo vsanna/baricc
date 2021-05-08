@@ -476,33 +476,33 @@ int test_enum() {
     assert(1, hogee3);
 }
 
-// int test_break() {
-//     int i = 0;
-//     for (;;) {
-//         i = i + 1;
-//         if (i == 3) {
-//             break;
-//         }
-//     }
-//     assert(3, i);
+int test_break() {
+    int i = 0;
+    for (;;) {
+        i = i + 1;
+        if (i == 3) {
+            break;
+        }
+    }
+    assert(3, i);
 
-//     i = 0;
-//     for (;;) {
-//         int j = 0;
-//         i = i + 1;
-//         while (i) {
-//             j = j + 1;
-//             if (j == 2) {
-//                 break;
-//             }
-//         }
-//         assert(2, j);
-//         if (i == 3) {
-//             break;
-//         }
-//     }
-//     assert(3, i);
-// }
+    i = 0;
+    for (;;) {
+        int j = 0;
+        i = i + 1;
+        while (i) {
+            j = j + 1;
+            if (j == 2) {
+                break;
+            }
+        }
+        assert(2, j);
+        if (i == 3) {
+            break;
+        }
+    }
+    assert(3, i);
+}
 
 // int test_continue() {
 //     int i = 0;
@@ -737,7 +737,7 @@ int main() {
     test_struct();
     test_typedef();
     test_enum();
-    // test_break();
+    test_break();
     // test_continue();
     // test_addeq();
     // test_addeq_ptr();

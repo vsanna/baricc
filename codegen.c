@@ -11,11 +11,12 @@ static char* argreg4[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
 static char* argreg8[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 
 // 構文木からアセンブラを作るところまで一気に進める
-int if_id = 0;
+int if_sequence = 0;
+int break_sequence = 0;
 // NOTE: ここに手を加えるときには細心の注意を払う!
 // 出力されたアセンブラをみてどこがおかしいかを把握するのは至難
 void gen(Node* node) {
-    int id = if_id;
+    int id = if_sequence;
     int num_args = 0;
     Type* type;
 
@@ -193,7 +194,7 @@ void gen(Node* node) {
             printf("  ret\n");
             return;
         case ND_IF:
-            if_id++;
+            if_sequence++;
             // lhs: cond
             // rhs: stmt(main) or else(lhs=main, rhs=alt)
 
@@ -223,7 +224,7 @@ void gen(Node* node) {
 
             return;
         case ND_WHILE:
-            if_id++;
+            if_sequence++;
             /*
             [cond]
             je end
@@ -240,7 +241,7 @@ void gen(Node* node) {
             printf(".Lend%d:\n", id);
             return;
         case ND_FOR:
-            if_id++;
+            if_sequence++;
             /*
             Aをコンパイルしたコード
             .LbeginXXX:
@@ -287,7 +288,7 @@ void gen(Node* node) {
             }
             return;
         case ND_FUNC_CALL:
-            if_id++;
+            if_sequence++;
             /*
             call前に引数をABIの定義するレジスタに登録する
             TODO: epilogueでpushするんじゃないのか?

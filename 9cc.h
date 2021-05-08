@@ -32,6 +32,7 @@ typedef enum {
     TK_STRUCT,
     TK_TYPEDEF,
     TK_ENUM,
+    TK_BREAK,
 } TokenKind;
 
 struct Token {
@@ -234,3 +235,4 @@ extern LVar* globals[100];
 extern StringToken* strings;
 extern Tag* tags;
 extern EnumVar* enum_vars;
+extern int break_sequence;

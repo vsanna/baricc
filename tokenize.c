@@ -98,10 +98,13 @@ typedef struct ReservedWord {
 } ReservedWord;
 
 ReservedWord reserved_words[] = {
-    {"return", TK_RETURN},   {"if", TK_IF},         {"else", TK_ELSE},
-    {"while", TK_WHILE},     {"for", TK_FOR},       {"int", TK_TYPE},
-    {"char", TK_TYPE},       {"sizeof", TK_SIZEOF}, {"struct", TK_STRUCT},
-    {"typedef", TK_TYPEDEF}, {"enum", TK_ENUM},     {"", TK_EOF},
+    {"return", TK_RETURN}, {"if", TK_IF},
+    {"else", TK_ELSE},     {"while", TK_WHILE},
+    {"for", TK_FOR},       {"int", TK_TYPE},
+    {"char", TK_TYPE},     {"sizeof", TK_SIZEOF},
+    {"struct", TK_STRUCT}, {"typedef", TK_TYPEDEF},
+    {"enum", TK_ENUM},     {"break", TK_BREAK},
+    {"", TK_EOF},
 };
 
 // 入力文字列pをトークない頭してそれを返す

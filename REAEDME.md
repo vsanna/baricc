@@ -38,3 +38,6 @@ $ make test
 # when you need verbose
 $ bash -x ./test.sh
 ```
+
+## supported feature
+- [ ] static

@@ -6,8 +6,10 @@ LVar* locals[100];
 LVar* globals[100];  // TODO: 配列でなくてよい
 int cur_scope_depth = 0;
 StringToken* strings;
-Type* structs[100];  // TODO: at most 100 struct defs
-int struct_def_index = 0;
+// Type* structs[100];  // TODO: at most 100 struct defs
+// int struct_def_index = 0;
+Tag* tags;
+EnumVar* enum_vars;
 
 /**************************
  * node builder
@@ -51,6 +53,21 @@ Node* code[100];
 void program() {
     int i = 0;
     while (!at_eof()) {
+        Token* tk = token;
+        if (consume_kind(TK_TYPEDEF)) {
+            define_typedef();
+            continue;
+        }
+
+        if (check_kind(TK_ENUM)) {
+            define_enum();
+            int debug;
+            expect(";");
+            continue;
+        }
+
+        // TODO: if(check_kind(TK_ENUM)) にしたい
+
         Define* def = read_define_head();
         if (def == NULL) {
             error("def is NULL\n");
@@ -59,11 +76,11 @@ void program() {
         if (consume("(")) {
             // 関数定義
             code[i] = func_def(def);
-            // } else if (consume_kind(TK_STRUCT)) {
-            //     // struct 定義. これはcompilerじにのみ保持する情報なのでnodeは返さない
-            //     structs[struct_def_index] = define_struct();
-            //     struct_def_index++;
-            //     continue;
+        } else if (def->type->ty == STRUCT) {
+            // TODO: check_kindは消せるかも
+            define_struct();
+            expect(";");
+            continue;
         } else {
             // global変数の定義
             Node* gvar = define_variable(def, globals);
@@ -77,16 +94,111 @@ void program() {
     code[i] = NULL;
 }
 
-// 各structごとにlocalsを設けてあげる
+// typedef struct Hoge {int a;} Gegi;
+// typedef struct Hoge Geho;
+// typedef int INT;
+// typedef char* String;
+// TODO: 未定義のstructでtypedefすることはまだできない
+bool define_typedef() {
+    Define* def = read_define_head();
+    read_define_head(def);
+    expect(";");
+
+    // type(struct)をident(alias)で登録
+    char* alias_name = calloc(100, sizeof(char));
+    memcpy(alias_name, def->ident->str, def->ident->len);
+    push_tag(alias_name, def->type);
+    return true;
+}
+
+// enum Hoge { A = 100, B = 200}
+Type* define_enum() {
+    if (!consume_kind(TK_ENUM)) {
+        return NULL;
+    }
+
+    Token* name = consume_kind(TK_IDENT);
+
+    if (name && !check("{")) {
+        Tag* tag = find_tag(name);
+        if (!tag) {
+            error("type not found.");
+        }
+        return tag->type;  // intが変えるはず
+    }
+
+    expect("{");
+    int num = 0;
+    while (true) {
+        // NOTE: 末尾に,がついていてもOK
+        if (consume("}")) {
+            break;
+        }
+        // AAA = 10,
+        // or
+        // AAA,
+        Token* n = consume_kind(TK_IDENT);
+
+        if (consume("=")) {
+            num = expect_number();
+        } else {
+            num += 1;
+        }
+
+        EnumVar* e = calloc(1, sizeof(EnumVar));
+        e->name = calloc(100, sizeof(char));
+        memcpy(e->name, n->str, n->len);
+        e->value = num;
+        e->next = enum_vars;
+        enum_vars = e;
+
+        // define_variable(def, globals);
+        if (consume("}")) {
+            break;
+        }
+        expect(",");
+    }
+
+    // register to tags
+    if (name) {
+        char* namestr = calloc(name->len, sizeof(char));
+        memcpy(namestr, name->str, name->len);
+        push_tag(namestr, int_type());
+    }
+
+    int debug;
+
+    return int_type();
+}
+
+Type* int_type() {
+    Type* t = calloc(1, sizeof(Type));
+    t->ty = INT;
+    t->size = 4;
+    return t;
+}
+
+// structを定義orlookupしてその型を返す
 // NOTE: struct自体は何かをアセンブラに吐き出すわけではない(compilerだけが持つ情報)なのでnode不要
-// define_struct = "struct" tag(ident)? "{" (define_variable ";")* "}" alias(ident)?
-//                          ^start
+// define_struct = "struct" tag(ident)? "{" (define_variable ";")* "}"
+//                  ^start
+// STRUCTのtypeを返す
 Type* define_struct() {
     if (!consume_kind(TK_STRUCT)) {
         return NULL;
     }
 
-    // TODO: read struct tag
+    Token* name = consume_kind(TK_IDENT);
+
+    // nameがあってすでに定義済みのstructの場合は struct Hoge h; のように定義できるので、そのtypeを引っ張ってくる
+    // TODO: 定義済みならそのoverrideを許さず、{}が続いたらエラー
+    if (name && !check("{")) {
+        Tag* tag = find_tag(name);
+        if (!tag) {
+            error("type not found.");
+        }
+        return tag->type;
+    }
 
     expect("{");
 
@@ -145,6 +257,18 @@ Type* define_struct() {
 
     struct_type->members = head.next;
     struct_type->size = align_to(offset, maxSize);
+
+    // register to tags
+    if (name) {
+        // TODO: これが必要な理由. tag名に struct を入れるのはなぜ?
+        // char* struct_prefix = "struct ";
+        // char* namestr = calloc(name->len + strlen(struct_prefix), sizeof(char));
+        // memcpy(namestr, struct_prefix, strlen(struct_prefix));
+        // memcpy(namestr + strlen(struct_prefix), name->str, name->len);
+        char* namestr = calloc(name->len, sizeof(char));
+        memcpy(namestr, name->str, name->len);
+        push_tag(namestr, struct_type);
+    }
 
     return struct_type;
 }
@@ -463,6 +587,15 @@ Node* primary() {
             return node;
         }
 
+        // enumの値がきたとき
+        Node* num = find_enum_var(tok);
+        if (num) {
+            return num;
+        }
+
+        // TODO: type alias の場合
+        // 変数定義と変数代入を両方やる
+
         // 変数呼び出しの場合
         return variable(tok);
     }
@@ -654,8 +787,6 @@ Node* define_variable(Define* def, LVar** varlist) {
 //     return init;
 // }
 
-// TODO: これは本当? 外のscopeの値をそのまま利用 or
-// ウワがいてしまう
 // a[1] ==> *(a+1)
 // variable = ident ("[" num "]")?
 //            ^start
@@ -663,7 +794,7 @@ Node* variable(Token* tok) {
     Node* node = new_node(ND_LVAR);
     LVar* lvar = find_variable(tok);
     if (lvar == NULL) {
-        char name[100] = {0};
+        char* name[100] = {0};
         memcpy(name, tok->str, tok->len);
         error("variable %s is not defined yet", name);
     }
@@ -679,50 +810,77 @@ Node* variable(Token* tok) {
 
     Type* tp = node->type;
     bool has_index = false;
-    // TODO: 今はa.b[0].c[2][4] といった書き方ができない.
-    while (consume("[")) {
-        has_index = true;
-        // a[3] は *(a + 3) にする
-        // DEREF -- ADD -- a
-        //              -- MUL -- 3(expr)
-        //                     -- sizeof(a)
 
-        // 大きな1歩の中に小さな2歩
-        // (a + 1)はあどれすで、[a + 1]が示す値もアドレス
-        // int a[n][m]; にたいして、 a[1][2]を取得するには
-        // DEREF( (a + sizeof(int * m: 1行のsize) * 1) + sizeof(int:
-        // 1cellのサイズ) * 2 ) 最後にだけderefする
-        Node* add = new_node(ND_ADD);
-        add->lhs = node;  // 変数
+    // a.b[0]->c[2][4]
+    while (true) {
+        while (consume("[")) {
+            has_index = true;
+            // a[3] は *(a + 3) にする
+            // DEREF -- ADD -- a
+            //              -- MUL -- 3(expr)
+            //                     -- sizeof(a)
 
-        Node* index_val = new_num(expect_number());
+            // 大きな1歩の中に小さな2歩
+            // (a + 1)はあどれすで、[a + 1]が示す値もアドレス
+            // int a[n][m]; にたいして、 a[1][2]を取得するには
+            // DEREF( (a + sizeof(int * m: 1行のsize) * 1) + sizeof(int:
+            // 1cellのサイズ) * 2 ) 最後にだけderefする
+            Node* add = new_node(ND_ADD);
+            add->lhs = node;  // 変数
 
-        // NOTE:
-        // ここのtype_sizeでみるのは要素のサイズなので常にptr_to一個先をみる
-        add->rhs =
-            new_binary(ND_MUL, index_val, new_num(get_type_size(tp->ptr_to)));
-        tp = tp->ptr_to;
-        // TODO: node(ND_LVAR)のtypeが配列のままなのにptrになっちゃってない?
-        node = add;
-        expect("]");
+            Node* index_val = new_num(expect_number());
+
+            // NOTE:
+            // ここのtype_sizeでみるのは要素のサイズなので常にptr_to一個先をみる
+            add->rhs = new_binary(ND_MUL, index_val,
+                                  new_num(get_type_size(tp->ptr_to)));
+            tp = tp->ptr_to;
+            // TODO: node(ND_LVAR)のtypeが配列のままなのにptrになっちゃってない?
+            node = add;
+            expect("]");
+            continue;
+        }
+        if (has_index) {
+            Node* deref_node = new_node(ND_DEREF);
+            deref_node->lhs = node;
+            node = deref_node;
+        }
+
+        // memberアクセス
+        while (consume(".")) {
+            node = struct_ref(node);
+            continue;
+        }
+
+        // memberアクセス
+        while (consume("->")) {
+            Type* t =
+                node->type
+                    ->ptr_to;  // 今nodeはPTR of STRUCT のLVAR. その指すtype = STRUCTをとっておく
+            Node* deref = new_node(ND_DEREF);
+            deref->lhs =
+                node;  // ここのnodeはLVAR. ただしptrのハズ. それをderefにわたすことで
+            deref->type =
+                t;  // deref node に structをセット. この時点でderefはa.bと同じ構造に変換されてる
+            node = struct_ref(deref);
+            continue;
+        }
+
+        break;
     }
-    if (has_index) {
-        Node* deref_node = new_node(ND_DEREF);
-        deref_node->lhs = node;
-        node = deref_node;
-    }
 
-    //
-    while (consume(".")) {
-        Node* member = new_node(ND_MEMBER);
-        member->lhs = node;
-        member->member = find_member(consume_kind(TK_IDENT), node->type);
-        member->type = member->member->ty;
-        node = member;
-        fprintf(stderr, "[DEBUG] member name: %s, offset: %d\n",
-                member->member->name, member->member->offset);
-    }
+    return node;
+}
 
+// memberアクセス
+Node* struct_ref(Node* node) {
+    Node* member = new_node(ND_MEMBER);
+    member->lhs = node;  // ベースオブジェクト
+    member->member =
+        find_member(consume_kind(TK_IDENT), node->type);  // 取得したいmember
+    member->type = member->member->ty;
+    node =
+        member;  // ND_MEMBERはbaseのアドレス+memberのoffsetをpushするアセンブラを生成する
     return node;
 }
 
@@ -730,11 +888,15 @@ Member* find_member(Token* tok, Type* type) {
     if (tok == NULL) {
         error("member ident must come here\n");
     }
-    char* name[100];
-    memcpy(name, tok->str, tok->len);
+    if (type == NULL) {
+        error("member type is not found.\n");
+    }
+
+    char* member_name[100] = {0};
+    memcpy(member_name, tok->str, tok->len);
 
     for (Member* m = type->members; m; m = m->next) {
-        if (strcmp(name, m->name) == 0) {
+        if (strcmp(member_name, m->name) == 0) {
             return m;
         }
     }
@@ -920,10 +1082,40 @@ int get_type_size(Type* type) {
 // assume:  current token = int
 // move to: current token = ident
 Define* read_define_head() {
-    // read struct definition if possible
-    Type* type = define_struct();
+    Type* type = NULL;
 
-    // type "*"*
+    // for rollback
+    Token* t = token;
+
+    // read alias
+    Token* ident = consume_kind(TK_IDENT);
+    if (ident) {
+        Tag* tag = find_tag(ident);
+        if (tag) {
+            type = tag->type;
+        } else {
+            // a = 1; のような式もココに入ってきてしまう
+            token = t;  // rollback
+        }
+    }
+
+    // read struct definition if possible
+    if (type == NULL) {
+        type = define_struct();
+    }
+
+    // read enum definition if possible
+    bool is_enum = false;
+    if (type == NULL) {
+        type = define_enum();
+        if (type) {
+            is_enum = true;
+        }
+    }
+
+    int debug;  // DEBUG: type == define_enum() のtypoを修正したところから
+
+    // read (int|char) "*"*
     if (type == NULL) {
         Token* typeToken = consume_kind(TK_TYPE);
         if (typeToken == NULL) {
@@ -933,11 +1125,8 @@ Define* read_define_head() {
         type = calloc(1, sizeof(Type));
         int isChar = memcmp("char", typeToken->str, typeToken->len) == 0;
 
-        char* tmp[100] = {0};
-        memcpy(tmp, typeToken->str, typeToken->len);
         type->ty = isChar ? CHAR : INT;
     }
-
     while (consume("*")) {
         Type* t = calloc(1, sizeof(Type));
         t->ty = PTR;
@@ -952,8 +1141,11 @@ Define* read_define_head() {
     Node* node = NULL;
     Token* tok = consume_kind(TK_IDENT);
 
-    if (tok == NULL) {
-        error("function name(ident) should come here.");
+    // NOTE: struct/enumの定義時には型の直後に変数名不要.
+    // TODO: refactor
+    if (tok == NULL && type->ty != STRUCT && !is_enum) {
+        print_type(type);
+        error("ident should come here.");
     }
 
     Define* def = calloc(1, sizeof(Define));
@@ -995,3 +1187,41 @@ void read_define_suffix(Define* def) {
 
 // TODO: ココを理解
 int align_to(int n, int align) { return (n + align - 1) & ~(align - 1); }
+
+// global変数のtagsに追加する
+void push_tag(char* name, Type* type) {
+    Tag* tag = calloc(1, sizeof(Tag));
+    tag->name = name;
+    tag->type = type;
+    if (tags != NULL) {
+        tag->next = tags;
+    }
+    tags = tag;
+}
+
+Tag* find_tag(Token* tok) {
+    char* name[100] = {0};
+    memcpy(name, tok->str, tok->len);
+
+    for (Tag* tag = tags; tag; tag = tag->next) {
+        if (strcmp(tag->name, name) == 0) {
+            return tag;
+        }
+    }
+
+    return NULL;
+}
+
+// 変数名を受け取ってそれがenumに登録されていれば(ex. enum Hoge {AAA, BBB} のAAA, BBB)
+Node* find_enum_var(Token* tok) {
+    char* name[100] = {0};
+    memcpy(name, tok->str, tok->len);
+
+    for (EnumVar* e = enum_vars; e; e = e->next) {
+        if (strcmp(e->name, name) == 0) {
+            return new_num(e->value);
+        }
+    }
+
+    return NULL;
+}

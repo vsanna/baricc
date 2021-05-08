@@ -38,7 +38,7 @@ void print_token(Token *tok) {
     } else {
         char name[100] = {0};
         memcpy(name, tok->str, tok->len);
-        fprintf(stderr, "[DEBUG] token: %s\n", name);
+        fprintf(stderr, "[DEBUG] token: %2d %s\n", tok->kind, name);
     }
 }
 
@@ -60,6 +60,8 @@ void print_type(Type *type) {
             case ARRAY:
                 name = "ARRAY";
                 break;
+            case STRUCT:
+                name = "STRUCT";
             default:
                 break;
         }

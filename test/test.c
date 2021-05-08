@@ -11,14 +11,15 @@ char g_msg2[4] = "bar";
 // TODO: stringのarrayはまだ未対応
 // char *g_strings[] = {"abc", "def"};
 
-// struct Hoge {
-//     int a;
-//     char b;
-//     int c;
-// };
+typedef int Int;
+typedef char *String;
+struct Hoge {
+    int a;
+    char b;
+    int c;
+};
+typedef struct Hoge StructHoge;
 
-// typedef int Int;
-// typedef char *String;
 // String strtest = "cccc";
 // typedef struct Hoge StructHoge;
 
@@ -28,7 +29,7 @@ char g_msg2[4] = "bar";
 //     int a;
 // };
 
-// enum HogeEnum { AAA = 10, BBB, CCC };
+enum HogeEnum { AAA = 10, BBB, CCC };
 
 // enum LastComma {
 //     AAA,
@@ -382,6 +383,12 @@ int test_local_variable_init() {
     assert(102, def[2]);
 }
 
+struct Hoge {
+    int a;
+    char b;
+    int c;
+};
+
 int test_struct() {
     // struct {} で一つの型
     struct {
@@ -389,7 +396,6 @@ int test_struct() {
         int bbb;
         int ccc;
     } abc;
-    // TODO: abc.aaaが20になるのをなおすところから。offsetか~?
     abc.aaa = 10;
     abc.bbb = 20;
     abc.ccc = 30;
@@ -398,44 +404,77 @@ int test_struct() {
     assert(30, abc.ccc);
     assert(30, abc.aaa + abc.bbb);
 
-    struct StTest {
+    struct {
         int a;
         char b;
         int c;
     } ccc;
     int size = &ccc.c - &ccc.a;
     assert(8, size);
+    // TODO sizeof(struct型)が未対応
+    // TODO sizeof(型)も未対応
 
-    // struct StTest ccc2;
-    // int size2 = &ccc2.c - &ccc2.a;
-    // assert(8, size2);
+    struct Hoge x;
+    x.a = 3;
+    assert(3, x.a);
 
-    // ccc2.a = 7;
-    // struct StTest *ptr = &ccc2;
-    // assert(7, ptr->a);
+    struct StTest {
+        int a;
+        char b;
+        int c;
+    } ccc2;
+    int size2 = &ccc2.c - &ccc2.a;
+    assert(8, size2);
+
+    struct StTest ccc3;
+    int size3 = &ccc3.c - &ccc3.a;
+    assert(8, size3);
+
+    ccc2.a = 7;
+    struct StTest *ptr = &ccc2;
+    assert(7, ptr->a);
 }
 
-// int test_typedef() {
-//     Int b;
-//     b = 10;
-//     assert(10, b);
+int test_typedef() {
+    // 初期化式がおかしい
+    // String a = "hoge";
+    String a;
+    a = "hogehoge";
+    Int b;
+    b = 10;
+    assert(10, b);
+    assert(104, a[0]);
+    assert(111, a[1]);
+    assert(103, a[2]);
+    assert(101, a[3]);
 
-//     // struct Hoge hoge;
-//     StructHoge hoge;
-//     hoge.a = 10;
-//     hoge.b = 20;
-//     assert(10, hoge.a);
-//     assert(20, hoge.b);
-// }
+    StructHoge hoge;
+    hoge.a = 10;
+    hoge.b = 20;
+    assert(10, hoge.a);
+    assert(20, hoge.b);
+}
 
-// int test_enum() {
-//     enum HogeEnum2 { AAA = 10, BBB, CCC } aa;
-//     enum HogeEnum2 hoge;
-//     hoge = AAA;
-//     assert(10, hoge);
-//     assert(11, BBB);
-//     assert(12, CCC);
-// }
+int test_enum() {
+    // 関数内定義では型の直後に変数必須. 他の関数から見えないようにする効果もある.
+    // typedefはglobalにしかできない
+    enum HogeEnum2 { AAA = 10, BBB, CCC } hogee;
+    enum HogeEnum2 hogee2;
+    hogee = AAA;
+    assert(10, hogee);  // 先頭は最初の要素と同じ値
+    assert(11, BBB);
+    assert(12, CCC);
+
+    hogee2 = BBB;
+    assert(11, hogee2);
+
+    // NOTE: enumの値を単にglobal変数として扱っているので同じenum名を使ってはだめ
+    // NOTE: enumは1スタート
+    // enum HogeEnum3 { AAA, BBB } hogee3;
+    enum HogeEnum3 { A, B } hogee3;
+    hogee3 = A;
+    assert(1, hogee3);
+}
 
 // int test_break() {
 //     int i = 0;
@@ -696,8 +735,8 @@ int main() {
     test_gloval_variable_init();
     test_local_variable_init();
     test_struct();
-    // test_typedef();
-    // test_enum();
+    test_typedef();
+    test_enum();
     // test_break();
     // test_continue();
     // test_addeq();

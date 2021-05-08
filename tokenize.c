@@ -7,10 +7,7 @@ LVar *locals[100];
 // 次のトークンが期待している記号のときにはトークンを一つ読み進めてtrueを返す
 // それ以外にはfalseを返す
 bool consume(char *op) {
-    if (token->kind != TK_RESERVED || strlen(op) != token->len ||
-        // mempcmp(a, b, len) a/bを先頭からlen文だけ比較. 等しい場合は0, a >
-        // bのときは1, a < bのときは-1
-        memcmp(token->str, op, token->len)) {
+    if (!check(op)) {
         return false;
     }
     advance_token();
@@ -20,13 +17,22 @@ bool consume(char *op) {
 // current tokenが指定したTokenKindであれば、それを返しつつ、1つよみ進める
 // それ以外はNULL
 Token *consume_kind(TokenKind kind) {
-    if (token->kind != kind) {
+    if (!check_kind(kind)) {
         return NULL;
     }
     Token *tok = token;
     advance_token();
     return tok;
 }
+
+// current tokenが指定した記号かどうかを判定. 進めはしない
+bool check(char *op) {
+    return (token->kind == TK_RESERVED) && (strlen(op) == token->len) &&
+           (memcmp(token->str, op, token->len) == 0);
+}
+
+// current tokenが指定したTokenKindかどうかを調べる. 進めはしない.
+bool check_kind(TokenKind kind) { return token->kind == kind; }
 
 // 次のトークンが期待している記号のときにはトークンを一つ読み進める。
 // それ以外にはエラーを投げる
@@ -45,7 +51,8 @@ void expect(char *op) {
 // それ以外の場合にはエラー
 int expect_number() {
     if (token->kind != TK_NUM) {
-        error_at(token->str, "数ではありませんん");
+        int debug;
+        error_at(token->str, "数ではありません\n");
     }
     int val = token->val;
     advance_token();
@@ -91,10 +98,10 @@ typedef struct ReservedWord {
 } ReservedWord;
 
 ReservedWord reserved_words[] = {
-    {"return", TK_RETURN}, {"if", TK_IF},         {"else", TK_ELSE},
-    {"while", TK_WHILE},   {"for", TK_FOR},       {"int", TK_TYPE},
-    {"char", TK_TYPE},     {"sizeof", TK_SIZEOF}, {"struct", TK_STRUCT},
-    {"", TK_EOF},
+    {"return", TK_RETURN},   {"if", TK_IF},         {"else", TK_ELSE},
+    {"while", TK_WHILE},     {"for", TK_FOR},       {"int", TK_TYPE},
+    {"char", TK_TYPE},       {"sizeof", TK_SIZEOF}, {"struct", TK_STRUCT},
+    {"typedef", TK_TYPEDEF}, {"enum", TK_ENUM},     {"", TK_EOF},
 };
 
 // 入力文字列pをトークない頭してそれを返す
@@ -109,7 +116,7 @@ Token *tokenize() {
     Token *cur = &head;
 
     while (*p) {
-        // print_token(cur);
+        print_token(cur);
 
         // 空白
         if (isspace(*p)) {
@@ -156,7 +163,7 @@ Token *tokenize() {
         }
 
         if (startswith(p, "==") || startswith(p, "!=") || startswith(p, "<=") ||
-            startswith(p, ">=")) {
+            startswith(p, ">=") || startswith(p, "->")) {
             cur = new_token(TK_RESERVED, cur, p, 2);
             p += 2;
             continue;
@@ -169,7 +176,7 @@ Token *tokenize() {
         }
 
         // alphabet+いくつかの記号からなる文字列のまとまりは変数名
-        if ('a' <= *p && *p <= 'z') {
+        if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z')) {
             char *start = p;
             while (is_alnum(*p)) {
                 p++;

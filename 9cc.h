@@ -6,8 +6,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-// tokenize
-// tokenの種類
+typedef struct Node Node;
+typedef struct Token Token;
+typedef struct Type Type;
+typedef struct Member Member;
+typedef struct LVar LVar;
+typedef struct Tag Tag;
+typedef struct StringToken StringToken;
+typedef struct Define Define;
+typedef struct EnumVar EnumVar;
+
 typedef enum {
     TK_RESERVED,  // any single character symbol
     TK_NUM,       // primray integer
@@ -22,26 +30,35 @@ typedef enum {
     TK_SIZEOF,
     TK_STRING,
     TK_STRUCT,
+    TK_TYPEDEF,
+    TK_ENUM,
 } TokenKind;
 
-typedef struct Node Node;
-typedef struct Token Token;
-typedef struct Type Type;
-typedef struct Member Member;
-
 struct Token {
-    TokenKind kind;  // トークンの種別
-    Token* next;     // 次の入力トークン
-    int val;         // TK_NUMの場合の値
-    char* str;       // トークン文字列
-    int len;  // トークンの長さ(lenを追加するまでは1文字の前提だった)
+    TokenKind kind;  // type of the token
+    Token* next;     // next token. we use linkedlist instead of array.
+    int val;         // actual value when kind == TK_NUM
+    char* str;       // pointer of where the token starts in the given program.
+    int len;  // length of the token. with len and str, we can get the token label.
 };
 
+/*
+Member: definition of members of a struct.
+*/
 struct Member {
-    Member* next;
-    Type* ty;
+    Member* next;  // next member definition. we use linkedlist instaed of array
+    Type* ty;      // Type of the member
+    char* name;    // the member's name
+    int offset;  // offset of the member from the starting point of base variable.
+                 // actually, offset = sum of sizes of previous members
+};
+
+// 型名へのalias. Structのtagも typedef int INTのaliasも同様のもの
+// TODO: つまり typedef struct Hoge Hoge; は無意味?
+struct Tag {
+    Tag* next;
     char* name;
-    int offset;
+    Type* type;  //
 };
 
 // 型情報. ptr/arrayはその先の型情報も必要なので、それをptr_toとして持つ
@@ -59,7 +76,6 @@ struct Type {
 };
 
 // local variables(LinkedList)
-typedef struct LVar LVar;
 struct LVar {
     LVar* next;
     char* name;
@@ -73,9 +89,8 @@ struct LVar {
 };
 
 LVar* find_variable(Token* tok);
-
+Node* find_enum_var(Token* tok);
 // stringでありながらかつそのmap的なもの
-typedef struct StringToken StringToken;
 struct StringToken {
     char* value;
     int index;
@@ -83,7 +98,6 @@ struct StringToken {
 };
 
 // read_define用
-typedef struct Define Define;
 struct Define {
     Token* ident;
     Type* type;
@@ -92,6 +106,8 @@ struct Define {
 Define* read_define();
 bool consume(char* op);
 Token* consume_kind(TokenKind kind);
+bool check(char* op);
+bool check_kind(TokenKind kind);
 void expect(char* op);
 int expect_number();
 void advance_token();
@@ -132,7 +148,7 @@ typedef enum {
     ND_ADDR,
     ND_DEREF,
     ND_STRING,
-    ND_MEMBER,  // a.b のdot
+    ND_MEMBER,  // a.b のdot or a->b のarrow. ND_MEMBER_ACCESSのほうがいいな。
 } NodeKind;
 
 struct Node {
@@ -153,7 +169,6 @@ struct Node {
 };
 
 Node* new_node(NodeKind kind);
-
 Node* new_binary(NodeKind kind, Node* lhs, Node* rhs);
 Node* new_num(int val);
 
@@ -181,10 +196,21 @@ void read_define_suffix(Define* def);
 Type* type_annotation();
 Type* define_struct();
 Member* find_member(Token* tok, Type* type);
-
+void push_tag(char* name, Type* type);
+Tag* find_tag(Token* tok);
+Node* struct_ref(Node* node);
+bool define_typedef();
+Type* define_enum();
+Type* int_type();
 // 構文木からアセンブラを作るところまで一気に進める
 void gen(Node* node);
 void gen_val(Node* node);
+
+struct EnumVar {
+    EnumVar* next;
+    char* name;
+    int value;
+};
 
 // util
 void print_token(Token* token);
@@ -206,3 +232,5 @@ extern LVar* locals[100];
 extern int cur_scope_depth;
 extern LVar* globals[100];
 extern StringToken* strings;
+extern Tag* tags;
+extern EnumVar* enum_vars;

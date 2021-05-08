@@ -27,12 +27,14 @@ typedef enum {
     TK_WHILE,
     TK_FOR,
     TK_TYPE,  // type annotation
+
     TK_SIZEOF,
     TK_STRING,
     TK_STRUCT,
     TK_TYPEDEF,
     TK_ENUM,
     TK_BREAK,
+    TK_CONTINUE,
 } TokenKind;
 
 struct Token {
@@ -151,6 +153,7 @@ typedef enum {
     ND_STRING,
     ND_MEMBER,  // a.b のdot or a->b のarrow. ND_MEMBER_ACCESSのほうがいいな。
     ND_BREAK,
+    ND_CONTINUE,
 } NodeKind;
 
 struct Node {
@@ -238,3 +241,4 @@ extern Tag* tags;
 extern EnumVar* enum_vars;
 extern int if_sequence;
 extern int break_sequence;
+extern int continue_sequence;

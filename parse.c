@@ -401,6 +401,12 @@ Node* stmt() {
         return node;
     }
 
+    if (consume_kind(TK_CONTINUE)) {
+        Node* node = new_node(ND_CONTINUE);
+        expect(";");
+        return node;
+    }
+
     // TODO: 上とstyle合わせたい
     Node* block_node = block();
     if (block_node != NULL) {

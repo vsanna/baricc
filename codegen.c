@@ -13,11 +13,13 @@ static char* argreg8[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 // 構文木からアセンブラを作るところまで一気に進める
 int if_sequence = 0;
 int break_sequence = 0;
+int continue_sequence = 0;
 // NOTE: ここに手を加えるときには細心の注意を払う!
 // 出力されたアセンブラをみてどこがおかしいかを把握するのは至難
 void gen(Node* node) {
     int id = if_sequence;
     int original_brk = 0;
+    int original_cnt = 0;
     int num_args = 0;
     Type* type;
 
@@ -200,6 +202,12 @@ void gen(Node* node) {
             }
             printf("  jmp .Lend%d\n", break_sequence);
             return;
+        case ND_CONTINUE:
+            if (continue_sequence == 0) {
+                error("currently not in for, while");
+            }
+            printf("  jmp .Lcontinue%d\n", continue_sequence);
+            return;
         case ND_IF:
             if_sequence++;
             // lhs: cond
@@ -232,6 +240,8 @@ void gen(Node* node) {
             if_sequence++;
             original_brk = break_sequence;
             break_sequence = id;
+            original_cnt = continue_sequence;
+            continue_sequence = id;
             /*
             [cond]
             je end
@@ -239,19 +249,26 @@ void gen(Node* node) {
             .end:
             */
             printf(".Lbegin%d:\n", id);
+            printf(".Lcontinue%d:\n",
+                   id);  // TODO: LcontinueはLbeginとまとめられる?
+            // 条件
             gen(node->lhs);
             printf("  pop rax\n");
             printf("  cmp rax, 0\n");
             printf("  je .Lend%d\n", id);
+            // 実処理
             gen(node->rhs);
             printf("  jmp .Lbegin%d\n", id);
             printf(".Lend%d:\n", id);
             break_sequence = original_brk;
+            continue_sequence = original_cnt;
             return;
         case ND_FOR:
             if_sequence++;
             original_brk = break_sequence;
             break_sequence = id;
+            original_cnt = continue_sequence;
+            continue_sequence = id;
             /*
             Aをコンパイルしたコード
             .LbeginXXX:
@@ -284,6 +301,7 @@ void gen(Node* node) {
             gen(node->rhs->rhs);
 
             // 後処理
+            printf(".Lcontinue%d:\n", id);
             if (node->rhs->lhs != NULL) {
                 gen(node->rhs->lhs);
             }
@@ -291,6 +309,7 @@ void gen(Node* node) {
             printf("  jmp .Lbegin%d\n", id);
             printf(".Lend%d:\n", id);
             break_sequence = original_brk;
+            continue_sequence = original_cnt;
             return;
         case ND_BLOCK:
             for (int i = 0; node->block[i] != NULL; i++) {
@@ -483,6 +502,8 @@ void gen(Node* node) {
             cqo       // rdx, rax <- 10 を代入する命令.
             全体で10なので、rdxは0が入る idiv rdi  // rdx,rax(10) / rdi
             を行い、商をrax, あまりをrdxにset push rax  // 答えをpush
+
+            TODO: sete, setne, setl, setle と alの使い方
             */
             printf("  idiv rdi\n");
             break;

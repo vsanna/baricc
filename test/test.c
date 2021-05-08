@@ -504,30 +504,30 @@ int test_break() {
     assert(3, i);
 }
 
-// int test_continue() {
-//     int i = 0;
-//     int j = 0;
-//     while (i < 10) {
-//         i = i + 1;
-//         if (i > 5) {
-//             continue;
-//         }
-//         j = j + 1;
-//     }
-//     assert(10, i);
-//     assert(5, j);
+int test_continue() {
+    int i = 0;
+    int j = 0;
+    while (i < 10) {
+        i = i + 1;
+        if (i > 5) {
+            continue;
+        }
+        j = j + 1;
+    }
+    assert(10, i);
+    assert(5, j);
 
-//     i = 0;
-//     j = 0;
-//     for (; i < 10; i = i + 1) {
-//         if (i > 5) {
-//             continue;
-//         }
-//         j = j + 1;
-//     }
-//     assert(10, i);
-//     assert(6, j);
-// }
+    i = 0;
+    j = 0;
+    for (; i < 10; i = i + 1) {
+        if (i > 5) {
+            continue;
+        }
+        j = j + 1;
+    }
+    assert(10, i);
+    assert(6, j);
+}
 
 // int test_addeq() {
 //     int i = 2;
@@ -738,7 +738,7 @@ int main() {
     test_typedef();
     test_enum();
     test_break();
-    // test_continue();
+    test_continue();
     // test_addeq();
     // test_addeq_ptr();
     // test_pp();

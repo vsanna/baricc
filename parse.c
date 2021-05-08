@@ -454,20 +454,23 @@ Node* assign() {
     }
 
     if (consume("+=")) {
-        Node* add = new_node(ND_ADD);
+        Node* left = node;
         Node* right = equality();
-        add->lhs = node;
-        add->rhs = right;
+        Node* add = add_op(left, right);
         node = new_binary(ND_ASSIGN, node, add);
         return node;
     }
 
     if (consume("-=")) {
-        Node* sub = new_node(ND_SUB);
+        // Node* sub = new_node(ND_SUB);
+        // Node* right = equality();
+        // sub->lhs = node;
+        // sub->rhs = right;
+        // node = new_binary(ND_ASSIGN, node, sub);
+        Node* left = node;
         Node* right = equality();
-        sub->lhs = node;
-        sub->rhs = right;
-        node = new_binary(ND_ASSIGN, node, sub);
+        Node* add = sub_op(left, right);
+        node = new_binary(ND_ASSIGN, node, add);
         return node;
     }
     if (consume("*=")) {
@@ -533,27 +536,42 @@ Node* add() {
 
     for (;;) {
         if (consume("+")) {
-            if (node->type != NULL && node->type->ty != INT) {
-                int size_of_type = get_type_size(node->type->ptr_to);
-                node = new_binary(
-                    ND_ADD, node,
-                    new_binary(ND_MUL, mul(), new_num(size_of_type)));
-            } else {
-                node = new_binary(ND_ADD, node, mul());
-            }
+            node = add_op(node, mul());
         } else if (consume("-")) {
-            if (node->type != NULL && node->type->ty != INT) {
-                int size_of_type = get_type_size(node->type->ptr_to);
-                node = new_binary(
-                    ND_SUB, node,
-                    new_binary(ND_MUL, mul(), new_num(size_of_type)));
-            } else {
-                node = new_binary(ND_SUB, node, mul());
-            }
+            node = sub_op(node, mul());
         } else {
             return node;
         }
     }
+}
+
+// 通常の演算 or ポインタ演算に対応
+// TODO: refactor
+Node* add_op(Node* left, Node* right) {
+    if (left->kind != ND_NUM && left->kind != ND_LVAR) {
+        error("cannot do add operation on this node. kind: %d\n", left->kind);
+    }
+    if (left->type != NULL && (left->type->ty == PTR)) {
+        int size_of_type = get_type_size(left->type->ptr_to);
+        left = new_binary(ND_ADD, left,
+                          new_binary(ND_MUL, right, new_num(size_of_type)));
+    } else {
+        left = new_binary(ND_ADD, left, right);
+    }
+    return left;
+}
+Node* sub_op(Node* left, Node* right) {
+    if (left->kind != ND_NUM && left->kind != ND_LVAR) {
+        error("cannot do sub operation on this node. kind: %d\n", left->kind);
+    }
+    if (left->type != NULL && (left->type->ty == PTR)) {
+        int size_of_type = get_type_size(left->type->ptr_to);
+        left = new_binary(ND_SUB, left,
+                          new_binary(ND_MUL, right, new_num(size_of_type)));
+    } else {
+        left = new_binary(ND_SUB, left, right);
+    }
+    return left;
 }
 
 // mul = unary("*" unary| "/" unary)*

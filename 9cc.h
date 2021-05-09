@@ -154,6 +154,10 @@ typedef enum {
     ND_MEMBER,  // a.b のdot or a->b のarrow. ND_MEMBER_ACCESSのほうがいいな。
     ND_BREAK,
     ND_CONTINUE,
+    ND_PRE_INC,  // ++a
+    ND_PRE_DEC,  // --a
+    ND_SUF_INC,  // a++
+    ND_SUF_DEC,  // a--
 } NodeKind;
 
 struct Node {
@@ -207,6 +211,7 @@ Node* struct_ref(Node* node);
 bool define_typedef();
 Type* define_enum();
 Type* int_type();
+Node* ptr_conversion(Node* node, Node* right);
 // 構文木からアセンブラを作るところまで一気に進める
 void gen(Node* node);
 void gen_val(Node* node);

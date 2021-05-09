@@ -321,6 +321,8 @@ Node* func_def(Define* def) {
 //        | block
 //        | "break" ";"
 //        | "continue" ";"
+//        | ("--" | "++") ident
+//        | ident ("--" | "++")
 //        consume_kindココでしてるからそれもdefineにもってく
 Node* stmt() {
     Node* node;
@@ -441,10 +443,10 @@ Node* block() {
     return node;
 }
 
-// expr = assign
+// expr ::= assign
 Node* expr() { return assign(); }
 
-// assign = equality ("=" equality)?
+// assign ::= equality ("=" equality)?
 Node* assign() {
     Node* node = equality();
 
@@ -454,23 +456,14 @@ Node* assign() {
     }
 
     if (consume("+=")) {
-        Node* left = node;
-        Node* right = equality();
-        Node* add = add_op(left, right);
+        Node* add = new_binary(ND_ADD, node, ptr_conversion(node, equality()));
         node = new_binary(ND_ASSIGN, node, add);
         return node;
     }
 
     if (consume("-=")) {
-        // Node* sub = new_node(ND_SUB);
-        // Node* right = equality();
-        // sub->lhs = node;
-        // sub->rhs = right;
-        // node = new_binary(ND_ASSIGN, node, sub);
-        Node* left = node;
-        Node* right = equality();
-        Node* add = sub_op(left, right);
-        node = new_binary(ND_ASSIGN, node, add);
+        Node* sub = new_binary(ND_SUB, node, ptr_conversion(node, equality()));
+        node = new_binary(ND_ASSIGN, node, sub);
         return node;
     }
     if (consume("*=")) {
@@ -536,42 +529,37 @@ Node* add() {
 
     for (;;) {
         if (consume("+")) {
-            node = add_op(node, mul());
+            // if (node->type != NULL && node->type->ptr_to != NULL) {
+            //     int size_of_type = get_type_size(node->type->ptr_to);
+            //     node = new_binary(
+            //         ND_ADD, node,
+            //         new_binary(ND_MUL, mul(), new_num(size_of_type)));
+            // } else {
+            //     node = new_binary(ND_ADD, node, mul());
+            // }
+            node = new_binary(ND_ADD, node, ptr_conversion(node, mul()));
         } else if (consume("-")) {
-            node = sub_op(node, mul());
+            node = new_binary(ND_SUB, node, ptr_conversion(node, mul()));
+            // if (node->type != NULL && node->type->ptr_to != NULL) {
+            //     int size_of_type = get_type_size(node->type->ptr_to);
+            //     node = new_binary(
+            //         ND_SUB, node,
+            //         new_binary(ND_MUL, mul(), new_num(size_of_type)));
+            // } else {
+            //     node = new_binary(ND_SUB, node, mul());
+            // }
         } else {
             return node;
         }
     }
 }
 
-// 通常の演算 or ポインタ演算に対応
-// TODO: refactor
-Node* add_op(Node* left, Node* right) {
-    if (left->kind != ND_NUM && left->kind != ND_LVAR) {
-        error("cannot do add operation on this node. kind: %d\n", left->kind);
+Node* ptr_conversion(Node* node, Node* right) {
+    if (node->type && node->type->ptr_to) {
+        int size_of_type = get_type_size(node->type->ptr_to);
+        return new_binary(ND_MUL, right, new_num(size_of_type));
     }
-    if (left->type != NULL && (left->type->ty == PTR)) {
-        int size_of_type = get_type_size(left->type->ptr_to);
-        left = new_binary(ND_ADD, left,
-                          new_binary(ND_MUL, right, new_num(size_of_type)));
-    } else {
-        left = new_binary(ND_ADD, left, right);
-    }
-    return left;
-}
-Node* sub_op(Node* left, Node* right) {
-    if (left->kind != ND_NUM && left->kind != ND_LVAR) {
-        error("cannot do sub operation on this node. kind: %d\n", left->kind);
-    }
-    if (left->type != NULL && (left->type->ty == PTR)) {
-        int size_of_type = get_type_size(left->type->ptr_to);
-        left = new_binary(ND_SUB, left,
-                          new_binary(ND_MUL, right, new_num(size_of_type)));
-    } else {
-        left = new_binary(ND_SUB, left, right);
-    }
-    return left;
+    return right;
 }
 
 // mul = unary("*" unary| "/" unary)*
@@ -588,8 +576,17 @@ Node* mul() {
     }
 }
 
-// unary = ("sizeof" | "+"" | "-" | "*" | "&")? unary | primary
+// unary = ("sizeof" | "+" | "-" | "*" | "&" | "++" | "--")? unary | primary
 Node* unary() {
+    // 前置++. ++a
+    if (consume("++")) {
+        return new_binary(ND_PRE_INC, unary(), NULL);
+    }
+    // 後置--. --a
+    if (consume("--")) {
+        return new_binary(ND_PRE_DEC, unary(), NULL);
+    }
+
     if (consume("+")) {
         return unary();
     }
@@ -931,6 +928,17 @@ Node* variable(Token* tok) {
             deref->type =
                 t;  // deref node に structをセット. この時点でderefはa.bと同じ構造に変換されてる
             node = struct_ref(deref);
+            continue;
+        }
+
+        // a++
+        if (consume("++")) {
+            node = new_binary(ND_SUF_INC, node, NULL);
+            continue;
+        }
+        // a--
+        if (consume("--")) {
+            node = new_binary(ND_SUF_DEC, node, NULL);
             continue;
         }
 

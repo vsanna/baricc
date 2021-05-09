@@ -67,8 +67,8 @@ int test_calc() {
     assert(15, 5 * (9 - 6));
     assert(4, (3 + 5) / 2);
     assert(10, -10 + 20);
-    assert(10, --10);
-    assert(10, --+10);
+    assert(10, -(-10));
+    assert(10, -(-(+10)));
 }
 
 int test_compare() {
@@ -544,30 +544,32 @@ int test_addeq() {
     assert(4, i);
 }
 
-// int test_addeq_ptr() {
-//     int a[10] = {1, 2, 3, 4, 5};
-//     int *ptr = &a;
-//     assert(1, *ptr);
-//     ptr += 4;
-//     assert(5, *ptr);
-//     ptr -= 3;
-//     assert(2, *ptr);
-// }
+int test_addeq_ptr() {
+    int a[10] = {1, 2, 3, 4, 5};
+    int *ptr = &a;
+    assert(1, *ptr);
+    ptr += 4;
+    assert(5, *ptr);
+    ptr -= 3;
+    assert(2, *ptr);
+}
 
-// int test_pp() {
-//     int a = 10;
-//     assert(10, a++);
-//     assert(11, a);
+int test_pp() {
+    int a = 10;
+    assert(11, ++a);
+    assert(11, a);
 
-//     assert(12, ++a);
-//     assert(12, a);
+    assert(10, --a);
+    assert(10, a);
 
-//     assert(12, a--);
-//     assert(11, a);
+    assert(10, a++);
+    assert(11, a);
 
-//     assert(10, --a);
-//     assert(10, a);
-// }
+    assert(11, a--);
+    assert(10, a);
+
+    assert(19, (a--) + (a++));
+}
 
 // int test_bit() {
 //     // not
@@ -740,8 +742,8 @@ int main() {
     test_break();
     test_continue();
     test_addeq();
-    // test_addeq_ptr();
-    // test_pp();
+    test_addeq_ptr();
+    test_pp();
     // test_bit();
     // test_and_or();
     // test_ternary();

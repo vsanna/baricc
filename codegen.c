@@ -22,8 +22,49 @@ void gen(Node* node) {
     int original_cnt = 0;
     int num_args = 0;
     Type* type;
+    Node* n;
 
     switch (node->kind) {
+        case ND_PRE_INC:
+            // ++a
+            // a + 1
+            // push a
+            n = new_node(ND_ASSIGN);
+            n->lhs = node->lhs;
+            n->rhs = new_binary(ND_ADD, node->lhs, new_num(1));
+            gen(n);
+            return;
+        case ND_SUF_INC:
+            // a++
+            // a = a + 1 して
+            // stackのtopの値に1引いて調整前の値にするく
+            gen(new_binary(ND_PRE_INC, node->lhs, NULL));
+            printf("  push 1\n");
+            printf("  pop rdi\n");
+            printf("  pop rax\n");
+            printf("  sub rax, rdi\n");
+            printf("  push rax\n");
+            return;
+        case ND_PRE_DEC:
+            // --a
+            // a - 1
+            // push a
+            n = new_node(ND_ASSIGN);
+            n->lhs = node->lhs;
+            n->rhs = new_binary(ND_SUB, node->lhs, new_num(1));
+            gen(n);
+            return;
+        case ND_SUF_DEC:
+            // a++
+            // a = a + 1 して
+            // stackのtopの値に1加えて調整前の値にする
+            gen(new_binary(ND_PRE_DEC, node->lhs, NULL));
+            printf("  push 1\n");
+            printf("  pop rdi\n");
+            printf("  pop rax\n");
+            printf("  add rax, rdi\n");
+            printf("  push rax\n");
+            return;
         case ND_STRING:
             // TODO: push offset {symbol, label} を調べる
             printf("  push offset .LC%d\n", node->string->index);

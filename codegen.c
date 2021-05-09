@@ -439,41 +439,33 @@ void gen(Node* node) {
             }
             return;
         case ND_SWITCH:
-            if_sequence++;  // TODO: case文になぜ必要?
             original_brk = break_sequence;
             break_sequence = id;
-
-            node->case_label = id;
 
             gen(node->lhs);  // switch(expr)
             printf("  pop rax\n");
 
-            // 先にjmp先とその条件を羅列.最初に当てはまったもののjmpを採用
             for (Node* n = node->next_case; n; n = n->next_case) {
-                // TODO: learn here more
+                // specify unique label id for each case so that cpu can jump to one of them directly.
                 n->case_label = ++if_sequence;
-                n->case_end_label = id;
-
                 printf("  cmp rax, %d\n", n->val);
-                printf("  jq .Lcase%d:\n", n->case_label);
+                printf("  je .Lcase%d\n", n->case_label);
             }
 
             if (node->default_case) {
-                // TODO: learn here more
                 node->default_case->case_label = ++if_sequence;
-                node->default_case->case_end_label = id;
-                printf("  jmp .Lcase%d:\n", n->default_case->case_end_label);
+                printf("  jmp .Lcase%d\n", node->default_case->case_label);
             }
 
-            printf("  jmp .Lbreak%d\n", id);
+            // for the case where no lable matches the given cond.
+            printf("  jmp .Lend%d\n", id);
             gen(node->rhs);
-            printf(".Lbreak%d:\n", id);
+            printf(".Lend%d:\n", id);
 
             break_sequence = original_brk;
             return;
         case ND_CASE:
-            printf("  .Lcase%d:\n", node->case_label);
-            gen(node->lhs);
+            printf(".Lcase%d:\n", node->case_label);
             return;
         case ND_FUNC_CALL:
             if_sequence++;

@@ -194,7 +194,6 @@ struct Node {
     Node* next_case;      // used when kind == ND_CASE
     Node* default_case;   // used when kind == ND_DEFAULT
     int case_label;       // used when kind == ND_SWITCH
-    int case_end_label;   // used when kind == ND_SWITCH
 };
 
 Node* new_node(NodeKind kind);
@@ -262,7 +261,7 @@ char* read_file(char* path);
 extern Token* token;
 extern char* user_input;
 extern char* filename;
-extern Node* code[100];
+extern Node* code[1000];
 // TODO: localsはメモリにはどうマッピングされるんだっけ. offsetの計算するだけ?
 extern LVar* locals[100];
 extern int cur_scope_depth;

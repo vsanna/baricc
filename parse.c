@@ -44,7 +44,7 @@ Node* new_string(StringToken* str) {
 
 // How many function/global variables/global typedef this compiler supports.
 // TODO replace Node*[] -> Node**
-Node* code[100];
+extern Node* code[1000];
 
 /**************************
  * parse functions
@@ -386,6 +386,7 @@ Node* stmt() {
                     stmt*
             }
         */
+        int debug;
         Node* node = new_node(ND_SWITCH);
         expect("(");
         node->lhs = expr();  // switch's flag expr
@@ -395,16 +396,17 @@ Node* stmt() {
         Node* sw = current_switch;
         current_switch = node;
 
-        expect("{");
-
-        node->rhs = stmt();  // TODO: ???
-
-        expect("}");
+        // ND_BLOCK comes here, and it has many ND_CASE and one ND_DEFAULT stmt
+        node->rhs = stmt();
 
         current_switch = sw;
+        return node;
     }
 
     if (consume_kind(TK_CASE)) {
+        /*
+            consider `case 1:` this line as one stmt which outputs label only.
+        */
         if (!current_switch) {
             error("stray case\n");
         }
@@ -413,22 +415,24 @@ Node* stmt() {
         int val = expect_number();
         expect(":");
         Node* node = new_node(ND_CASE);
-        node->lhs = stmt();
         node->val = val;
+        // NOTE: To check labels from the top one.
         node->next_case = current_switch->next_case;
         current_switch->next_case = node;
         return node;
     }
 
     if (consume_kind(TK_DEFAULT)) {
+        /*
+            consider `default:` this line as one stmt which outputs label only.
+        */
         if (!current_switch) {
             error("stray case\n");
         }
-        Node* node = new_node(ND_CASE);
+        Node* default_node = new_node(ND_CASE);
         expect(":");
-        node->lhs = stmt();
-        current_switch->default_case = node;
-        return node
+        current_switch->default_case = default_node;
+        return default_node;
     }
 
     if (consume_kind(TK_FOR)) {

@@ -3,7 +3,7 @@
 // 9cc.hでexternしたものをここで定義する
 Token* token;
 char* user_input;
-Node* code[100];
+Node* code[1000];
 int cur_scope_depth;
 
 int main(int argc, char** argv) {

@@ -646,17 +646,15 @@ int test_switch() {
     assert(5, i);
 
     switch (5) {
-        case 1: {
-        }
-        case 2: {
+        case 1:
+        case 2:
             break;
-        }
-        default: {
+        default:
             i = 10;
-        }
     }
     assert(10, i);
 
+    // TODO: enum未対応
     // enum SwitchTest { ST_A, ST_B } st;
     // st = ST_A;
 

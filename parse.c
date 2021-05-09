@@ -113,9 +113,7 @@ bool define_typedef() {
     expect(";");
 
     // type(struct)をident(alias)で登録
-    char* alias_name = calloc(100, sizeof(char));
-    memcpy(alias_name, def->ident->str, def->ident->len);
-    push_tag(alias_name, def->type);
+    push_tag(def->ident, def->type);
     return true;
 }
 
@@ -169,9 +167,7 @@ Type* define_enum() {
 
     // register to tags
     if (name) {
-        char* namestr = calloc(name->len, sizeof(char));
-        memcpy(namestr, name->str, name->len);
-        push_tag(namestr, int_type());
+        push_tag(name, int_type());
     }
 
     int debug;
@@ -275,13 +271,7 @@ Type* define_struct() {
     // register to tags
     if (name) {
         // TODO: これが必要な理由. tag名に struct を入れるのはなぜ?
-        // char* struct_prefix = "struct ";
-        // char* namestr = calloc(name->len + strlen(struct_prefix), sizeof(char));
-        // memcpy(namestr, struct_prefix, strlen(struct_prefix));
-        // memcpy(namestr + strlen(struct_prefix), name->str, name->len);
-        char* namestr = calloc(name->len, sizeof(char));
-        memcpy(namestr, name->str, name->len);
-        push_tag(namestr, struct_type);
+        push_tag(name, struct_type);
     }
 
     return struct_type;
@@ -1483,7 +1473,11 @@ void read_define_suffix(Define* def) {
 int align_to(int n, int align) { return (n + align - 1) & ~(align - 1); }
 
 // global変数のtagsに追加する
-void push_tag(char* name, Type* type) {
+void push_tag(Token* tok, Type* type) {
+    char* name = calloc(100, sizeof(char));
+    memcpy(name, tok->str, tok->len);
+
+    // Tag* tag = find_tag(name);
     Tag* tag = calloc(1, sizeof(Tag));
     tag->name = name;
     tag->type = type;
@@ -1494,7 +1488,7 @@ void push_tag(char* name, Type* type) {
 }
 
 Tag* find_tag(Token* tok) {
-    char* name[100] = {0};
+    char* name = calloc(100, sizeof(char));
     memcpy(name, tok->str, tok->len);
 
     for (Tag* tag = tags; tag; tag = tag->next) {
@@ -1503,6 +1497,15 @@ Tag* find_tag(Token* tok) {
         }
     }
 
+    // when tag is not found, incomplete tag is returned as a dummy
+    // so that we can use undefined type in advance.
+    // Tag* tag = calloc(1, sizeof(Tag));
+    // tag->name = name;
+    // tag->type = calloc(1, sizeof(Type));
+    // tag->type->incomplete = 1;
+    // tag->next = tags;
+    // tags = tag;
+    // return tag;
     return NULL;
 }
 

@@ -271,6 +271,8 @@ int test_sizeof() {
     assert(4, sizeof(int));
     assert(1, sizeof(char));
 
+    // NOTE: it looks like standard C/C++ doesn't support sizeof operator without braces
+    // when the right item is typename.
     assert(4, sizeof int);
     assert(1, sizeof char);
 
@@ -279,8 +281,6 @@ int test_sizeof() {
         char b;
     } a;
 
-    // // struct
-    // // TODO 要確認
     assert(8, sizeof(a));
     assert(8, sizeof(struct SizeOfTest));
     assert(12, sizeof(struct Hoge4 {
@@ -289,7 +289,6 @@ int test_sizeof() {
                int c;
            }));
 
-    // typedef
     assert(4, sizeof(Int));
     assert(8, sizeof(String));
 

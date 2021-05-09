@@ -19,7 +19,7 @@ typedef struct EnumVar EnumVar;
 typedef enum {
     TK_RESERVED,  // any single character symbol
     TK_NUM,       // primray integer
-    TK_EOF,       // 入力の終わりを表すトークン
+    TK_EOF,       // EOF token
     TK_IDENT,     // identification of variable, function
     TK_RETURN,
     TK_IF,
@@ -79,6 +79,7 @@ struct Type {
     size_t array_size;
     Member* members;
     int size;
+    int incomplete;
 };
 
 // local variables(LinkedList)
@@ -230,7 +231,7 @@ void read_define_suffix(Define* def);
 Type* type_annotation();
 Type* define_struct();
 Member* find_member(Token* tok, Type* type);
-void push_tag(char* name, Type* type);
+void push_tag(Token* tok, Type* type);
 Tag* find_tag(Token* tok);
 Node* struct_ref(Node* node);
 bool define_typedef();

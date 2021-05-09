@@ -52,9 +52,8 @@ $ bash -x ./test.sh
 - break
 - continue
 - a++, a--, ++a, --a
-- bit: ~, | &
+- bit: ~, |, &, ^
 - !
-
 
 
 - [ ] switch
@@ -64,6 +63,6 @@ $ bash -x ./test.sh
 - [ ] ternary operator
 - [ ] rest parameters
 - [ ] static
-- [ ] bit calcl: ! ~ | &
 - [ ] || &&
+- [ ] ++, -- のptr対応
 

@@ -164,6 +164,8 @@ typedef enum {
     ND_BITOR,    // |
     ND_BITXOR,   // ^
     ND_BITAND,   // &
+    ND_LOGOR,    // ||
+    ND_LOGAND,   // &&
 } NodeKind;
 
 struct Node {
@@ -201,6 +203,8 @@ Node* add();
 Node* mul();
 Node* unary();
 Node* primary();
+Node* logor();
+Node* logand();
 Node* bitor ();
 Node* bitxor();
 Node*bitand();

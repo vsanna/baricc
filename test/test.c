@@ -601,18 +601,25 @@ int test_bit() {
     assert(0, 0 ^ 0);
     assert(1, 1 ^ 0);
     assert(0, 1 ^ 1);
+
+    assert(3, (2 - 2) & 5 | 3);
+    assert(0, (2 - 2) & (5 | 3));  // 0000, 0101, 0011
 }
 
-// int test_and_or() {
-//     assert(1, 0 || 1);
-//     assert(1, 0 || (2 - 2) || 5);
-//     assert(0, 0 || 0);
-//     assert(0, 0 || (2 - 2));
+int test_and_or() {
+    assert(1, 0 || 1);
+    assert(1, 0 || (2 - 2) || 5);
+    assert(0, 0 || 0);
+    assert(0, 0 || (2 - 2));
 
-//     assert(0, 0 && 1);
-//     assert(0, (2 - 2) && 5);
-//     assert(1, 1 && 5);
-// }
+    assert(0, 0 && 1);
+    assert(0, (2 - 2) && 5);
+    assert(1, 1 && 5);
+    assert(1, 1 && 5 && 100);
+
+    assert(1, (2 - 2) && 5 || 3);
+    assert(0, (2 - 2) && (5 || 3));  // 0000, 0101, 0011
+}
 
 // int test_ternary() {
 //     assert(2, 0 ? 1 : 2);
@@ -750,7 +757,7 @@ int main() {
     test_addeq_ptr();
     test_pp();
     test_bit();
-    // test_and_or();
+    test_and_or();
     // test_ternary();
     // test_switch();
     // test_void();

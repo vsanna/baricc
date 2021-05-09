@@ -25,6 +25,41 @@ void gen(Node* node) {
     Node* n;
 
     switch (node->kind) {
+        case ND_LOGAND:
+            if_sequence++;
+            // leftから評価して、一度でもfalseになったら即離脱
+            gen(node->lhs);
+            printf("  pop rax\n");
+            printf("  cmp rax, 0\n");
+            printf("  je .Lfalse%d\n", id);
+            gen(node->rhs);
+            printf("  pop rax\n");
+            printf("  cmp rax, 0\n");
+            printf("  je .Lfalse%d\n", id);
+            // cond == trueなので1をpush
+            printf("  push 1\n");
+            printf("  jmp .Lend%d\n", id);
+            printf(".Lfalse%d:\n", id);
+            printf("  push 0\n");
+            printf(".Lend%d:\n", id);
+            return;
+        case ND_LOGOR:
+            if_sequence++;
+            // leftから評価して、一度でもtrueになったら即離脱
+            gen(node->lhs);
+            printf("  pop rax\n");
+            printf("  cmp rax, 0\n");
+            printf("  jne .Ltrue%d\n", id);
+            gen(node->rhs);
+            printf("  pop rax\n");
+            printf("  cmp rax, 0\n");
+            printf("  jne .Ltrue%d\n", id);
+            printf("  push 0\n");
+            printf("  jmp .Lend%d\n", id);
+            printf(".Ltrue%d:\n", id);
+            printf("  push 1\n");
+            printf(".Lend%d:\n", id);
+            return;
         case ND_BITNOT:
             gen(node->lhs);
             printf("  pop rax\n");

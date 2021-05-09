@@ -448,27 +448,27 @@ Node* expr() { return assign(); }
 
 // assign ::= equality ("=" equality)?
 Node* assign() {
-    Node* node = bitor ();
+    Node* node = logor();
 
     if (consume("=")) {
-        node = new_binary(ND_ASSIGN, node, bitor ());
+        node = new_binary(ND_ASSIGN, node, logor());
         return node;
     }
 
     if (consume("+=")) {
-        Node* add = new_binary(ND_ADD, node, ptr_conversion(node, bitor ()));
+        Node* add = new_binary(ND_ADD, node, ptr_conversion(node, logor()));
         node = new_binary(ND_ASSIGN, node, add);
         return node;
     }
 
     if (consume("-=")) {
-        Node* sub = new_binary(ND_SUB, node, ptr_conversion(node, bitor ()));
+        Node* sub = new_binary(ND_SUB, node, ptr_conversion(node, logor()));
         node = new_binary(ND_ASSIGN, node, sub);
         return node;
     }
     if (consume("*=")) {
         Node* mul = new_node(ND_MUL);
-        Node* right = bitor ();
+        Node* right = logor();
         mul->lhs = node;
         mul->rhs = right;
         node = new_binary(ND_ASSIGN, node, mul);
@@ -476,7 +476,7 @@ Node* assign() {
     }
     if (consume("/=")) {
         Node* div = new_node(ND_DIV);
-        Node* right = bitor ();
+        Node* right = logor();
         div->lhs = node;
         div->rhs = right;
         node = new_binary(ND_ASSIGN, node, div);
@@ -486,10 +486,28 @@ Node* assign() {
     return node;
 }
 
+Node* logor() {
+    Node* node = logand();
+    while (consume("||")) {
+        // TODO: logorでなくていいのか
+        node = new_binary(ND_LOGOR, node, logor());
+    }
+    return node;
+}
+
+Node* logand() {
+    Node* node = bitor ();
+    while (consume("&&")) {
+        node = new_binary(ND_LOGAND, node, logand());
+    }
+    return node;
+}
+
 // TODO: よく理解する
 Node* bitor () {
     Node* node = bitxor();
     while (consume("|")) {
+        // TODO: bitorでなくてよいのか?
         node = new_binary(ND_BITOR, node, bitxor());
     }
     return node;
@@ -506,6 +524,7 @@ Node* bitxor() {
 Node*bitand() {
     Node* node = equality();
     while (consume("&")) {
+        // TODO bitandでなくてよいのか?
         node = new_binary(ND_BITAND, node, equality());
     }
     return node;

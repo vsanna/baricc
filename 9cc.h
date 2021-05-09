@@ -155,9 +155,15 @@ typedef enum {
     ND_BREAK,
     ND_CONTINUE,
     ND_PRE_INC,  // ++a
+
     ND_PRE_DEC,  // --a
     ND_SUF_INC,  // a++
     ND_SUF_DEC,  // a--
+    ND_NOT,      // !a
+    ND_BITNOT,   // ~a
+    ND_BITOR,    // |
+    ND_BITXOR,   // ^
+    ND_BITAND,   // &
 } NodeKind;
 
 struct Node {
@@ -195,6 +201,9 @@ Node* add();
 Node* mul();
 Node* unary();
 Node* primary();
+Node* bitor ();
+Node* bitxor();
+Node*bitand();
 Node* define_variable(Define* def, LVar** varlist);
 Node* variable(Token* tok);
 Node* local_variable_init(Node* node);

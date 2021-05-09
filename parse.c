@@ -448,27 +448,27 @@ Node* expr() { return assign(); }
 
 // assign ::= equality ("=" equality)?
 Node* assign() {
-    Node* node = equality();
+    Node* node = bitor ();
 
     if (consume("=")) {
-        node = new_binary(ND_ASSIGN, node, equality());
+        node = new_binary(ND_ASSIGN, node, bitor ());
         return node;
     }
 
     if (consume("+=")) {
-        Node* add = new_binary(ND_ADD, node, ptr_conversion(node, equality()));
+        Node* add = new_binary(ND_ADD, node, ptr_conversion(node, bitor ()));
         node = new_binary(ND_ASSIGN, node, add);
         return node;
     }
 
     if (consume("-=")) {
-        Node* sub = new_binary(ND_SUB, node, ptr_conversion(node, equality()));
+        Node* sub = new_binary(ND_SUB, node, ptr_conversion(node, bitor ()));
         node = new_binary(ND_ASSIGN, node, sub);
         return node;
     }
     if (consume("*=")) {
         Node* mul = new_node(ND_MUL);
-        Node* right = equality();
+        Node* right = bitor ();
         mul->lhs = node;
         mul->rhs = right;
         node = new_binary(ND_ASSIGN, node, mul);
@@ -476,13 +476,38 @@ Node* assign() {
     }
     if (consume("/=")) {
         Node* div = new_node(ND_DIV);
-        Node* right = equality();
+        Node* right = bitor ();
         div->lhs = node;
         div->rhs = right;
         node = new_binary(ND_ASSIGN, node, div);
         return node;
     }
 
+    return node;
+}
+
+// TODO: よく理解する
+Node* bitor () {
+    Node* node = bitxor();
+    while (consume("|")) {
+        node = new_binary(ND_BITOR, node, bitxor());
+    }
+    return node;
+}
+
+Node* bitxor() {
+    Node* node = bitand();
+    while (consume("^")) {
+        node = new_binary(ND_BITXOR, node, bitxor());
+    }
+    return node;
+}
+
+Node*bitand() {
+    Node* node = equality();
+    while (consume("&")) {
+        node = new_binary(ND_BITAND, node, equality());
+    }
     return node;
 }
 
@@ -599,6 +624,13 @@ Node* unary() {
     }
     if (consume("&")) {
         return new_binary(ND_ADDR, unary(), NULL);
+    }
+    if (consume("!")) {
+        return new_binary(ND_NOT, unary(), NULL);
+    }
+
+    if (consume("~")) {
+        return new_binary(ND_BITNOT, unary(), NULL);
     }
 
     // sizeof x: xのサイズを返す.

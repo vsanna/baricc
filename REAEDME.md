@@ -40,16 +40,29 @@ $ bash -x ./test.sh
 ```
 
 ## supported feature
-- 四則演算
-- ptr
+- +-*/
+- ==, !=, <, >, <=, >=
+- for, while, if
+- int, char
+- pointer: ref, deref
 - array
+- sizeof
 - enum
 - struct
 - break
 - continue
+- a++, a--, ++a, --a
+- bit: ~, | &
+- !
 
 
 
+- [ ] switch
+- [ ] nested type
+- [ ] #include
+- [ ] escape
+- [ ] ternary operator
+- [ ] rest parameters
 - [ ] static
 - [ ] bit calcl: ! ~ | &
 - [ ] || &&

@@ -25,6 +25,21 @@ void gen(Node* node) {
     Node* n;
 
     switch (node->kind) {
+        case ND_BITNOT:
+            gen(node->lhs);
+            printf("  pop rax\n");
+            printf("  not rax\n");
+            printf("  push rax\n");
+            return;
+        case ND_NOT:
+            // 出てきた値を0と比較しているだけ.
+            gen(node->lhs);
+            printf("  pop rax\n");
+            printf("  cmp rax, 0\n");
+            printf("  sete al\n");  // 比較した結果がalに入る
+            printf("  movzb rax, al\n");
+            printf("  push rax\n");
+            return;
         case ND_PRE_INC:
             // ++a
             // a + 1
@@ -568,6 +583,15 @@ void gen(Node* node) {
             printf("  cmp rax, rdi\n");
             printf("  setle al\n");
             printf("  movzb rax, al\n");
+            break;
+        case ND_BITXOR:
+            printf("  xor rax, rdi\n");
+            break;
+        case ND_BITOR:
+            printf("  or rax, rdi\n");
+            break;
+        case ND_BITAND:
+            printf("  and rax, rdi\n");
             break;
     }
 

@@ -30,6 +30,8 @@ typedef struct Hoge StructHoge;
 // };
 
 enum HogeEnum { AAA = 10, BBB, CCC };
+typedef enum Kind { K_A, K_B } Kind;
+Kind k = K_A;
 
 // enum LastComma {
 //     AAA,
@@ -474,6 +476,9 @@ int test_enum() {
     enum HogeEnum3 { A, B } hogee3;
     hogee3 = A;
     assert(1, hogee3);
+
+    // global + typedef
+    assert(K_A, k);
 }
 
 int test_break() {
@@ -571,32 +576,32 @@ int test_pp() {
     assert(19, (a--) + (a++));
 }
 
-// int test_bit() {
-//     // not
-//     assert(0, !1);
-//     assert(0, !2);
-//     assert(1, !0);
+int test_bit() {
+    // not
+    assert(0, !1);
+    assert(0, !2);
+    assert(1, !0);
 
-//     // bit not
-//     assert(-1, ~0);
-//     assert(0, ~-1);
+    // bit not
+    assert(-1, ~0);
+    assert(0, ~-1);
 
-//     // bit and
-//     assert(0, 0 & 1);
-//     assert(1, 3 & 1);
-//     assert(3, 7 & 3);
-//     assert(10, -1 & 10);
+    // bit and
+    assert(0, 0 & 1);
+    assert(1, 3 & 1);
+    assert(3, 7 & 3);
+    assert(10, -1 & 10);
 
-//     // bit or
-//     assert(0, 0 | 0);
-//     assert(1, 0 | 1);
-//     assert(1, 1 | 1);
+    // bit or
+    assert(0, 0 | 0);
+    assert(1, 0 | 1);
+    assert(1, 1 | 1);
 
-//     // bit xor
-//     assert(0, 0 ^ 0);
-//     assert(1, 1 ^ 0);
-//     assert(0, 1 ^ 1);
-// }
+    // bit xor
+    assert(0, 0 ^ 0);
+    assert(1, 1 ^ 0);
+    assert(0, 1 ^ 1);
+}
 
 // int test_and_or() {
 //     assert(1, 0 || 1);
@@ -744,7 +749,7 @@ int main() {
     test_addeq();
     test_addeq_ptr();
     test_pp();
-    // test_bit();
+    test_bit();
     // test_and_or();
     // test_ternary();
     // test_switch();

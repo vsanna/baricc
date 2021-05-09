@@ -295,6 +295,9 @@ int test_sizeof() {
 
     assert(4, sizeof Int);
     assert(8, sizeof String);
+
+    assert(4, sizeof(enum Yay{Y_A, Y_B}));
+    assert(4, sizeof enum Yay2{Y2_A, Y2_B});
 }
 
 int test_array() {

@@ -185,6 +185,12 @@ Type* int_type() {
     t->size = 4;
     return t;
 }
+Type* char_type() {
+    Type* t = calloc(1, sizeof(Type));
+    t->ty = CHAR;
+    t->size = 1;
+    return t;
+}
 
 // structを定義orlookupしてその型を返す
 // NOTE: struct自体は何かをアセンブラに吐き出すわけではない(compilerだけが持つ情報)なのでnode不要
@@ -748,6 +754,23 @@ Node* unary() {
     // sizeof x: xのサイズを返す.
     if (consume_kind(TK_SIZEOF)) {
         // "sizeof" unaryにおけるunaryの末尾までtokenをすすめる
+        // when tag(alias of type) is passed
+
+        // when pure type is passed
+        if ((check("(") && token->next->kind == TK_TYPE) ||
+            check_kind(TK_TYPE)) {
+            consume("(");
+            char* name[100] = {0};
+            memcpy(name, token->str, token->len);
+            if (name == "int") {
+                return new_num(get_type_size(int_type()));
+            } else if (name == "char") {
+                return new_num(get_type_size(char_type()));
+            } else {
+                error("invalid type name is passed here. %s", name);
+            }
+        }
+
         // when expr is passed here.
         Node* node = unary();
         int size;

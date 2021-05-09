@@ -264,8 +264,8 @@ int test_sizeof() {
 
     assert(4, sizeof(1));
 
-    // assert(4, sizeof(int));
-    // assert(1, sizeof(char));
+    assert(4, sizeof(int));
+    assert(1, sizeof(char));
 
     // struct SizeOfTest {
     //     int a;

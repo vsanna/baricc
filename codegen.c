@@ -4,6 +4,11 @@ int cur_scope_depth;
 StringToken* strings;
 
 // char* argregs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+// sets of alias based on byte size.
+// ex.
+// dil  = least 1byte of rdi
+// di   = least 2bytes of rdi
+// edi  = least 4bytes of rdi
 // サイズ(byte)ごとのレジスタのset
 static char* argreg1[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
 static char* argreg2[] = {"di", "si", "dx", "cx", "r8w", "r9w"};
@@ -14,8 +19,8 @@ static char* argreg8[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 int if_sequence = 0;
 int break_sequence = 0;
 int continue_sequence = 0;
-// NOTE: ここに手を加えるときには細心の注意を払う!
-// 出力されたアセンブラをみてどこがおかしいかを把握するのは至難
+// NOTE: BE CAREFUL when you change here.
+// It's not easy to find bugs in assembler.
 void gen(Node* node) {
     int id = if_sequence;
     int original_brk = 0;
@@ -548,27 +553,6 @@ void gen(Node* node) {
             if (locals[cur_scope_depth]) {
                 int offset = locals[cur_scope_depth]->offset;
                 printf("  sub rsp, %d\n", offset);
-
-                // fprintf(stderr, "[DEBUG] func def(%s) offset: %d\n",
-                //         node->funcname, locals[cur_scope_depth]->offset);
-                // for (LVar* lvar = locals[cur_scope_depth]; lvar;
-                //      lvar = lvar->next) {
-                //     char* tmp[100] = {0};
-                //     memcpy(tmp, lvar->name, lvar->len);
-                //     if (lvar->type->ty == STRUCT) {
-                //         for (Member* m = lvar->type->members; m; m = m->next) {
-                //             fprintf(stderr,
-                //                     "        [DEBUG] func def(%s): var(%s): "
-                //                     "member(%s) offset: %d\n",
-                //                     node->funcname, tmp, m->name, m->offset);
-                //         }
-                //     } else {
-                //         fprintf(
-                //             stderr,
-                //             "    [DEBUG] func def(%s): var(%s) offset: %d\n",
-                //             node->funcname, tmp, lvar->offset);
-                //     }
-                // }
             }
 
             // call-funcした際にABI指定のregisterに保存した引数を

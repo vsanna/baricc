@@ -66,8 +66,9 @@ $ bash -x ./test.sh
 - [ ] nested type
 - [ ] typedef struct A A;
 - [ ] ternary operator
-- [ ] rest parameters
 - [ ] static
 - [ ] ++, -- のptr対応
+
+- [ ] rest parameters
 - [ ] macro
 

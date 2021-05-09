@@ -3,13 +3,14 @@
 Token* token;
 char* user_input;
 LVar* locals[100];
-LVar* globals[100];  // TODO: 配列でなくてよい
+LVar* globals[100];  // TODO: globals doesn't need to be array
 int cur_scope_depth = 0;
 StringToken* strings;
 // Type* structs[100];  // TODO: at most 100 struct defs
 // int struct_def_index = 0;
 Tag* tags;
 EnumVar* enum_vars;
+Node* current_switch = NULL;
 
 /**************************
  * node builder
@@ -27,28 +28,32 @@ Node* new_binary(NodeKind kind, Node* lhs, Node* rhs) {
     return node;
 };
 
-// 数字のnodeを作る特殊
+// a util function to build num node
 Node* new_num(int val) {
     Node* node = new_node(ND_NUM);
     node->val = val;
     return node;
 }
 
-// ND_STRINGのnodeを返す
+// a util function to build string node
 Node* new_string(StringToken* str) {
     Node* node = new_node(ND_STRING);
     node->string = str;
     return node;
 }
 
-// 最大stmt数(仮)
-// TODO: 100行まで対応
+// How many function/global variables/global typedef this compiler supports.
+// TODO replace Node*[] -> Node**
 Node* code[100];
 
 /**************************
  * parse functions
  * *************************/
-// program = (func_def | define_variable ";" | "struct" truct_def ";")*
+// program ::= ( func_def
+//             | define_variable ";"
+//             | "struct" define_struct ";"
+//             | "enum" define_enum ";"
+//             )*
 // programをまずは関数の束とする
 void program() {
     int i = 0;
@@ -66,7 +71,7 @@ void program() {
             continue;
         }
 
-        // TODO: if(check_kind(TK_ENUM)) にしたい
+        // TODO: if(check_kind(TK_STRUCT)) にしたい
 
         Define* def = read_define_head();
         if (def == NULL) {
@@ -98,10 +103,13 @@ void program() {
 // typedef struct Hoge Geho;
 // typedef int INT;
 // typedef char* String;
-// TODO: 未定義のstructでtypedefすることはまだできない
+// define_typedef ::= "typedef" type_decl alias ";"
 bool define_typedef() {
+    // TODO: do consume_kind(TK_TYPEDEF) here
     Define* def = read_define_head();
     read_define_head(def);
+
+    // TODO: should not expect ";" here.
     expect(";");
 
     // type(struct)をident(alias)で登録
@@ -368,6 +376,61 @@ Node* stmt() {
         return node;
     }
 
+    if (consume_kind(TK_SWITCH)) {
+        /*
+            switch(expr) {
+                case int:
+                    stmt*
+                    (break;)*
+                default:
+                    stmt*
+            }
+        */
+        Node* node = new_node(ND_SWITCH);
+        expect("(");
+        node->lhs = expr();  // switch's flag expr
+        expect(")");
+
+        // TODO: why escaping here
+        Node* sw = current_switch;
+        current_switch = node;
+
+        expect("{");
+
+        node->rhs = stmt();  // TODO: ???
+
+        expect("}");
+
+        current_switch = sw;
+    }
+
+    if (consume_kind(TK_CASE)) {
+        if (!current_switch) {
+            error("stray case\n");
+        }
+        // TODO: we should be able to use enum here as well
+        // TODO: we also should be able to use expr
+        int val = expect_number();
+        expect(":");
+        Node* node = new_node(ND_CASE);
+        node->lhs = stmt();
+        node->val = val;
+        node->next_case = current_switch->next_case;
+        current_switch->next_case = node;
+        return node;
+    }
+
+    if (consume_kind(TK_DEFAULT)) {
+        if (!current_switch) {
+            error("stray case\n");
+        }
+        Node* node = new_node(ND_CASE);
+        expect(":");
+        node->lhs = stmt();
+        current_switch->default_case = node;
+        return node
+    }
+
     if (consume_kind(TK_FOR)) {
         // leftは初期化と終了条件を、
         // rightは後処理とstmtを保持
@@ -490,7 +553,7 @@ Node* assign() {
     return node;
 }
 
-// conditional = logor ? logor : logor
+// conditional ::= logor ("?" logor ":" logor)?
 Node* conditional() {
     Node* node = logor();
     if (consume("?")) {

@@ -102,7 +102,8 @@ ReservedWord reserved_words[] = {
     {"while", TK_WHILE},       {"for", TK_FOR},       {"int", TK_TYPE},
     {"char", TK_TYPE},         {"sizeof", TK_SIZEOF}, {"struct", TK_STRUCT},
     {"typedef", TK_TYPEDEF},   {"enum", TK_ENUM},     {"break", TK_BREAK},
-    {"continue", TK_CONTINUE}, {"", TK_EOF},
+    {"continue", TK_CONTINUE}, {"switch", TK_SWITCH}, {"case", TK_CASE},
+    {"default", TK_DEFAULT},   {"", TK_EOF},
 };
 
 // 入力文字列pをトークない頭してそれを返す

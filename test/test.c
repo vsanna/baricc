@@ -630,30 +630,62 @@ int test_ternary() {
     assert(100, result);
 }
 
-// int test_switch() {
-//     int i = 0;
-//     switch (0) {
-//         case 0:
-//             i = 5;
-//             break;
-//         case 1:
-//             i = 6;
-//             break;
-//         case 2:
-//             i = 7;
-//             break;
-//     }
-//     assert(5, i);
+int test_switch() {
+    int i = 0;
+    switch (0) {
+        case 0:
+            i = 5;
+            break;
+        case 1:
+            i = 6;
+            break;
+        case 2:
+            i = 7;
+            break;
+    }
+    assert(5, i);
 
-//     switch (5) {
-//         case 1:
-//         case 2:
-//             break;
-//         default:
-//             i = 10;
-//     }
-//     assert(10, i);
-// }
+    switch (5) {
+        case 1: {
+        }
+        case 2: {
+            break;
+        }
+        default: {
+            i = 10;
+        }
+    }
+    assert(10, i);
+
+    // enum SwitchTest { ST_A, ST_B } st;
+    // st = ST_A;
+
+    // switch (st) {
+    //     case ST_A:
+    //         i = 100;
+    //         break;
+    //     case ST_B:
+    //         i = 200;
+    //         break;
+    //     default:
+    //         break;
+    // }
+    // assert(i, 100);
+
+    // st = ST_B;
+
+    // switch (st) {
+    //     case ST_A:
+    //         i = 100;
+    //         break;
+    //     case ST_B:
+    //         i = 200;
+    //         break;
+    //     default:
+    //         break;
+    // }
+    // assert(i, 200);
+}
 
 // void test_void() {
 //     // コンパイルが通ればOK。
@@ -763,7 +795,7 @@ int main() {
     test_bit();
     test_and_or();
     test_ternary();
-    // test_switch();
+    test_switch();
     // test_void();
     // test_nest_types();
     // test_char_literal();

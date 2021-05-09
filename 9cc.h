@@ -35,6 +35,9 @@ typedef enum {
     TK_ENUM,
     TK_BREAK,
     TK_CONTINUE,
+    TK_SWITCH,
+    TK_CASE,
+    TK_DEFAULT,
 } TokenKind;
 
 struct Token {
@@ -166,7 +169,11 @@ typedef enum {
     ND_BITAND,   // &
     ND_LOGOR,    // ||
     ND_LOGAND,   // &&
+
     ND_TERNARY,  // ?:
+    ND_SWITCH,
+    ND_CASE,
+
 } NodeKind;
 
 struct Node {
@@ -184,6 +191,10 @@ struct Node {
     StringToken* string;  // used when kind == ND_STRING
     LVar* var;            // used when kind == ND_LVAR, ND_GVAR_DEF
     Member* member;       // used when kind == ND_MEMBER
+    Node* next_case;      // used when kind == ND_CASE
+    Node* default_case;   // used when kind == ND_DEFAULT
+    int case_label;       // used when kind == ND_SWITCH
+    int case_end_label;   // used when kind == ND_SWITCH
 };
 
 Node* new_node(NodeKind kind);

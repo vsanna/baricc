@@ -1499,14 +1499,13 @@ Tag* find_tag(Token* tok) {
 
     // when tag is not found, incomplete tag is returned as a dummy
     // so that we can use undefined type in advance.
-    // Tag* tag = calloc(1, sizeof(Tag));
-    // tag->name = name;
-    // tag->type = calloc(1, sizeof(Type));
-    // tag->type->incomplete = 1;
-    // tag->next = tags;
-    // tags = tag;
-    // return tag;
-    return NULL;
+    Tag* tag = calloc(1, sizeof(Tag));
+    tag->name = name;
+    tag->type = calloc(1, sizeof(Type));
+    tag->type->incomplete = 1;
+    tag->next = tags;
+    tags = tag;
+    return tag;
 }
 
 // 変数名を受け取ってそれがenumに登録されていれば(ex. enum Hoge {AAA, BBB} のAAA, BBB)

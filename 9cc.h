@@ -79,7 +79,7 @@ struct Type {
     size_t array_size;
     Member* members;
     int size;
-    int incomplete;
+    bool incomplete;
 };
 
 // local variables(LinkedList)
@@ -231,8 +231,9 @@ void read_define_suffix(Define* def);
 Type* type_annotation();
 Type* define_struct();
 Member* find_member(Token* tok, Type* type);
-void push_tag(Token* tok, Type* type);
+void push_tag(Token* tok, Type* type, bool is_complete);
 Tag* find_tag(Token* tok);
+Tag* find_or_register_tag(Token* tok);
 Node* struct_ref(Node* node);
 bool define_typedef();
 Type* define_enum();

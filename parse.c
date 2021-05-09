@@ -66,7 +66,6 @@ void program() {
 
         if (check_kind(TK_ENUM)) {
             define_enum();
-            int debug;
             expect(";");
             continue;
         }
@@ -75,8 +74,8 @@ void program() {
 
         Define* def = read_define_head();
         if (def == NULL) {
-            error0("def is NULL");
             print_token(token);
+            error0("def is NULL");
         }
         if (consume("(")) {
             // 関数定義
@@ -113,7 +112,7 @@ bool define_typedef() {
     expect(";");
 
     // type(struct)をident(alias)で登録
-    push_tag(def->ident, def->type);
+    push_tag(def->ident, def->type, false);
     return true;
 }
 
@@ -126,8 +125,8 @@ Type* define_enum() {
     Token* name = consume_kind(TK_IDENT);
 
     if (name && !check("{")) {
-        Tag* tag = find_tag(name);
-        if (!tag) {
+        Tag* tag = find_or_register_tag(name);
+        if (tag->type->incomplete) {
             error0("type not found.");
         }
         return tag->type;  // intが変えるはず
@@ -165,12 +164,10 @@ Type* define_enum() {
         expect(",");
     }
 
-    // register to tags
+    // register to tags as int type
     if (name) {
-        push_tag(name, int_type());
+        push_tag(name, int_type(), true);
     }
-
-    int debug;
 
     return int_type();
 }
@@ -203,10 +200,12 @@ Type* define_struct() {
     // nameがあってすでに定義済みのstructの場合は struct Hoge h; のように定義できるので、そのtypeを引っ張ってくる
     // TODO: 定義済みならそのoverrideを許さず、{}が続いたらエラー
     if (name && !check("{")) {
-        Tag* tag = find_tag(name);
-        if (!tag) {
-            error0("type not found.");
-        }
+        Tag* tag = find_or_register_tag(name);
+        // if (!tag) {
+        //     error0("type not found.");
+        // }
+        // TODO: ここでdummyのときにINTが変えることがおかしい. むりやりSTRUCTにここで変えてしまう
+        tag->type->ty = STRUCT;
         return tag->type;
     }
 
@@ -217,7 +216,6 @@ Type* define_struct() {
 
     Member head;
     Member* cur = &head;
-    //  = calloc(1, sizeof(Member));
 
     // TODO: tag名に対応
     // Token* name = consume_kind(TK_IDENT);
@@ -270,8 +268,7 @@ Type* define_struct() {
 
     // register to tags
     if (name) {
-        // TODO: これが必要な理由. tag名に struct を入れるのはなぜ?
-        push_tag(name, struct_type);
+        push_tag(name, struct_type, true);
     }
 
     return struct_type;
@@ -382,7 +379,6 @@ Node* stmt() {
                     stmt*
             }
         */
-        int debug;
         Node* node = new_node(ND_SWITCH);
         expect("(");
         node->lhs = expr();  // switch's flag expr
@@ -770,7 +766,7 @@ Node* unary() {
             return size_of_type;
         }
 
-        // when struct / enum is passed
+        // when struct / enum definition is passed
         if ((check("(") && (token->next->kind == TK_ENUM ||
                             token->next->kind == TK_STRUCT)) ||
             (check_kind(TK_ENUM) || check_kind(TK_STRUCT))) {
@@ -786,7 +782,7 @@ Node* unary() {
             return size_of_type;
         }
 
-        // when tag is pssed
+        // when tag(aslias of type) is passed
         if ((check("(") && token->next->kind == TK_IDENT) ||
             (check_kind(TK_IDENT))) {
             bool has_brace = false;
@@ -802,6 +798,9 @@ Node* unary() {
             }
 
             if (tag) {
+                if (tag->type->ty == STRUCT && tag->type->incomplete) {
+                    error("it's not allowed to use sizeof for incomplete type");
+                }
                 consume_kind(TK_IDENT);
                 Node* size_of_type = new_num(get_type_size(tag->type));
 
@@ -1168,12 +1167,19 @@ Node* struct_ref(Node* node) {
     return node;
 }
 
+// type(struct想定)がもつmemberの中で、tokを名前に持つものを返す
 Member* find_member(Token* tok, Type* type) {
     if (tok == NULL) {
         error0("member ident must come here");
     }
     if (type == NULL) {
-        error0("member type is not found.");
+        error0("member type is not passed.");
+    }
+
+    if (type->ty != STRUCT) {
+        print_token(tok);
+        print_type(type);
+        error0("this type doesn't have members.");
     }
 
     char* member_name[100] = {0};
@@ -1472,45 +1478,76 @@ void read_define_suffix(Define* def) {
 // TODO: ココを理解
 int align_to(int n, int align) { return (n + align - 1) & ~(align - 1); }
 
-// global変数のtagsに追加する
-void push_tag(Token* tok, Type* type) {
+// in general, when calling push_tag, the type should be complete
+// global変数のtagsに追加/上書きする
+void push_tag(Token* tok, Type* type, bool is_complete) {
     char* name = calloc(100, sizeof(char));
     memcpy(name, tok->str, tok->len);
 
-    // Tag* tag = find_tag(name);
-    Tag* tag = calloc(1, sizeof(Tag));
+    // NOTE: tag->type = type doesn't work
+    // because there are some parts that watching incomplete type directly.
+    Tag* tag = find_or_register_tag(tok);
+    // fprintf(stderr, "[DEBUG] updating tag: %s\n", name);
     tag->name = name;
-    tag->type = type;
-    if (tags != NULL) {
-        tag->next = tags;
+    tag->type->array_size = type->array_size;
+    tag->type->members = type->members;
+    // NOTE: typedef struct Hoge Hoge; doesn't make the struct definition complete.
+    // TODO: typedef check if struct Hoge {int a;} Hoge; works
+    if (tag->type->incomplete && is_complete) {
+        tag->type->incomplete = false;
     }
-    tags = tag;
+    tag->type->ptr_to = type->ptr_to;
+    tag->type->size = type->size;
+    tag->type->ty = type->ty;
 }
 
 Tag* find_tag(Token* tok) {
-    char* name = calloc(100, sizeof(char));
-    memcpy(name, tok->str, tok->len);
+    char* n = calloc(100, sizeof(char));
+    memcpy(n, tok->str, tok->len);
 
+    // fprintf(stderr, "[DEBUG] finding tag: %s\n", n);
     for (Tag* tag = tags; tag; tag = tag->next) {
-        if (strcmp(tag->name, name) == 0) {
+        if (strcmp(tag->name, n) == 0) {
+            // fprintf(stderr, "[DEBUG] tag: %s is found.\n", n);
             return tag;
         }
     }
 
+    // fprintf(stderr, "[DEBUG] tag: %s is not found.\n", n);
+    return NULL;
+}
+
+Tag* find_or_register_tag(Token* tok) {
+    char* n = calloc(100, sizeof(char));
+    memcpy(n, tok->str, tok->len);
+
+    // fprintf(stderr, "[DEBUG] finding tag: %s\n", n);
+    for (Tag* tag = tags; tag; tag = tag->next) {
+        if (strcmp(tag->name, n) == 0) {
+            // fprintf(stderr, "[DEBUG] tag: %s is found.\n", n);
+            return tag;
+        }
+    }
+    // fprintf(stderr, "[DEBUG] tag: %s is not found. register it tentatively\n",
+    //         n);
+
     // when tag is not found, incomplete tag is returned as a dummy
     // so that we can use undefined type in advance.
     Tag* tag = calloc(1, sizeof(Tag));
-    tag->name = name;
+    tag->name = n;
     tag->type = calloc(1, sizeof(Type));
-    tag->type->incomplete = 1;
-    tag->next = tags;
+    tag->type->incomplete = true;
+    if (tags) {
+        tag->next = tags;
+    }
     tags = tag;
     return tag;
 }
 
 // 変数名を受け取ってそれがenumに登録されていれば(ex. enum Hoge {AAA, BBB} のAAA, BBB)
 Node* find_enum_var(Token* tok) {
-    char* name[100] = {0};
+    char* name = calloc(100, sizeof(char));
+    ;
     memcpy(name, tok->str, tok->len);
 
     for (EnumVar* e = enum_vars; e; e = e->next) {

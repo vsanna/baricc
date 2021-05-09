@@ -22,11 +22,11 @@ typedef struct Hoge StructHoge;
 // String strtest = "cccc";
 // typedef struct Hoge StructHoge;
 
-// typedef struct Nest Nest;
-// struct Nest {
-//     struct Nest *next;
-//     int a;
-// };
+typedef struct Nest Nest;
+struct Nest {
+    struct Nest *next;
+    int a;
+};
 
 enum HogeEnum { AAA = 10, BBB, CCC };
 typedef enum Kind { K_A, K_B } Kind;
@@ -706,23 +706,23 @@ void test_void() {
     assert(1, 1);
 }
 
-// void test_nest_types() {
-//     Nest a;
-//     Nest *b;
-//     a.a = 10;
-//     b = &a;
-//     assert(10, b->a);
+void test_nest_types() {
+    Nest nestX;
+    Nest *nestY;
+    nestX.a = 10;
+    nestY = &nestX;
+    assert(10, nestY->a);
 
-//     Nest c;
-//     c.a = 20;
-//     a.next = &c;
-//     assert(20, b->next->a);
+    Nest nestZ;
+    nestZ.a = 20;
+    nestX.next = &nestZ;
+    assert(20, nestY->next->a);
 
-//     Nest d;
-//     d.a = 30;
-//     c.next = &d;
-//     assert(30, b->next->next->a);
-// }
+    Nest nestW;
+    nestW.a = 30;
+    nestZ.next = &nestW;
+    assert(30, nestY->next->next->a);
+}
 
 // void test_char_literal() {
 //     assert(97, 'a');
@@ -811,7 +811,7 @@ int main() {
     test_ternary();
     test_switch();
     test_void();
-    // test_nest_types();
+    test_nest_types();
     // test_char_literal();
 
     // test_hack();

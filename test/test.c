@@ -1,4 +1,3 @@
-
 int g_a;
 int g_b[10];
 int g_a_init3 = 3;
@@ -8,7 +7,7 @@ char g_array2[5] = {5, 6, 7, 8, 12};
 char *g_msg1 = "foo";
 char g_msg2[4] = "bar";
 
-// TODO: stringのarrayはまだ未対応
+// TODO: array of string is not supported yet
 // char *g_strings[] = {"abc", "def"};
 
 typedef int Int;
@@ -35,14 +34,14 @@ Kind k = K_A;
 
 // enum LastComma {
 //     AAA,
-//     BBB,  // 最後にカンマはあっても良い。
+//     BBB,  // it's allowed to put camma at the end of last item
 // };
 
 // // size_t, boolはintのalias
 // size_t size_t_v = 10;
 // bool bool_v = 1;
 
-// // extern, プロトタイプ宣言は無視される。
+// just ignore prototype decl.
 // extern int hoge;
 
 int assert(int expected, int actual) {
@@ -654,7 +653,7 @@ int test_switch() {
     }
     assert(10, i);
 
-    // TODO: enum未対応
+    // TODO: currently, switch doesn't support int as expr/label
     // enum SwitchTest { ST_A, ST_B } st;
     // st = ST_A;
 
@@ -685,10 +684,10 @@ int test_switch() {
     // assert(i, 200);
 }
 
-// void test_void() {
-//     // コンパイルが通ればOK。
-//     assert(1, 1);
-// }
+void test_void() {
+    // it's ok if compile goes well
+    assert(1, 1);
+}
 
 // void test_nest_types() {
 //     Nest a;
@@ -794,7 +793,7 @@ int main() {
     test_and_or();
     test_ternary();
     test_switch();
-    // test_void();
+    test_void();
     // test_nest_types();
     // test_char_literal();
 

@@ -75,7 +75,7 @@ void program() {
 
         Define* def = read_define_head();
         if (def == NULL) {
-            error("def is NULL\n");
+            error0("def is NULL");
             print_token(token);
         }
         if (consume("(")) {
@@ -130,7 +130,7 @@ Type* define_enum() {
     if (name && !check("{")) {
         Tag* tag = find_tag(name);
         if (!tag) {
-            error("type not found.");
+            error0("type not found.");
         }
         return tag->type;  // intが変えるはず
     }
@@ -203,7 +203,7 @@ Type* define_struct() {
     if (name && !check("{")) {
         Tag* tag = find_tag(name);
         if (!tag) {
-            error("type not found.");
+            error0("type not found.");
         }
         return tag->type;
     }
@@ -307,7 +307,7 @@ Node* func_def(Define* def) {
         if (arg_def == NULL) {
             char* name[100] = {0};
             memcpy(name, token->str, token->len);
-            error("invalid token comes here. %d", name);
+            error1("invalid token comes here. %d", name);
         }
 
         Node* variable_node = define_variable(arg_def, locals);
@@ -408,7 +408,7 @@ Node* stmt() {
             consider `case 1:` this line as one stmt which outputs label only.
         */
         if (!current_switch) {
-            error("stray case\n");
+            error0("stray case");
         }
         // TODO: we should be able to use enum here as well
         // TODO: we also should be able to use expr
@@ -427,7 +427,7 @@ Node* stmt() {
             consider `default:` this line as one stmt which outputs label only.
         */
         if (!current_switch) {
-            error("stray case\n");
+            error0("stray case");
         }
         Node* default_node = new_node(ND_CASE);
         expect(":");
@@ -748,6 +748,7 @@ Node* unary() {
     // sizeof x: xのサイズを返す.
     if (consume_kind(TK_SIZEOF)) {
         // "sizeof" unaryにおけるunaryの末尾までtokenをすすめる
+        // when expr is passed here.
         Node* node = unary();
         int size;
         if (node->kind == ND_NUM) {
@@ -756,6 +757,7 @@ Node* unary() {
             Type* t = get_type(node);
             size = get_type_size(t);
         }
+
         return new_num(size);
     }
 
@@ -843,7 +845,7 @@ Node* primary() {
 //                                    ^start        ^end
 Node* define_variable(Define* def, LVar** varlist) {
     if (def == NULL) {
-        error("invalid definition of function or variable");
+        error0("invalid definition of function or variable");
     }
 
     read_define_suffix(def);
@@ -910,7 +912,7 @@ Node* define_variable(Define* def, LVar** varlist) {
 
     // 新規変数の定義なのでlvarあってはこまる
     if (var) {
-        error("redefining variable %s", node->varname);
+        error1("redefining variable %s", node->varname);
     }
 
     // 新規変数なのでlvarを追加する
@@ -988,7 +990,7 @@ Node* define_variable(Define* def, LVar** varlist) {
 
 //     if (type->ty == ARRAY) {
 //         if (type->array_size == 0) {
-//             error("array size is not defined.\n");
+//             error1("array size is not defined.\n");
 //         }
 //         *size *= type->array_size;
 //     }
@@ -1005,7 +1007,7 @@ Node* variable(Token* tok) {
     if (lvar == NULL) {
         char* name[100] = {0};
         memcpy(name, tok->str, tok->len);
-        error("variable %s is not defined yet", name);
+        error1("variable %s is not defined yet", name);
     }
 
     // すでに宣言済みの変数であればそのoffsetを使う
@@ -1106,10 +1108,10 @@ Node* struct_ref(Node* node) {
 
 Member* find_member(Token* tok, Type* type) {
     if (tok == NULL) {
-        error("member ident must come here\n");
+        error0("member ident must come here");
     }
     if (type == NULL) {
-        error("member type is not found.\n");
+        error0("member type is not found.");
     }
 
     char* member_name[100] = {0};
@@ -1121,7 +1123,7 @@ Member* find_member(Token* tok, Type* type) {
         }
     }
 
-    error("member ident is not found\n");
+    error0("member ident is not found");
 }
 
 // まずlocal変数を探してなければglobal変数を探す
@@ -1173,7 +1175,7 @@ Node* local_variable_init(Node* node) {
             // a[0] ==> *(a + 0 * size)
             Node* add = new_node(ND_ADD);
             add->lhs = node;
-            if (node->type && node->type->ty != INT) {
+            if (node->type && node->type->ptr_to) {
                 int size = get_type_size(node->type->ptr_to);
                 add->rhs = new_num(i * size);
             }
@@ -1203,7 +1205,7 @@ Node* local_variable_init(Node* node) {
             // a[0] ==> *(a + 0 * size)
             Node* add = new_node(ND_ADD);
             add->lhs = node;
-            if (node->type && node->type->ty != INT) {
+            if (node->type && node->type->ptr_to) {
                 int size = get_type_size(node->type->ptr_to);
                 add->rhs = new_num(i * size);
             }
@@ -1253,7 +1255,7 @@ Type* get_type(Node* node) {
     if (t && node->kind == ND_DEREF) {
         t = t->ptr_to;
         if (t == NULL) {
-            error("invalid dereference");
+            error0("invalid dereference");
         }
         return t;
     }
@@ -1266,7 +1268,7 @@ Type* get_type(Node* node) {
 // CHAR -> 1
 int get_type_size(Type* type) {
     if (type == NULL) {
-        error("type should be non null");
+        error0("type should be non null");
     }
 
     int size;
@@ -1279,7 +1281,7 @@ int get_type_size(Type* type) {
             return 1;
         case ARRAY:
             if (type->array_size == 0) {
-                error("array size is zero.");
+                error0("array size is zero.");
             }
             return get_type_size(type->ptr_to) * type->array_size;
         case STRUCT:
@@ -1290,7 +1292,7 @@ int get_type_size(Type* type) {
             // return size;
             return type->size;
         default:
-            error("unexpected Type->ty comes here\n");
+            error0("unexpected Type->ty comes here");
     }
 }
 
@@ -1333,9 +1335,8 @@ Define* read_define_head() {
         }
     }
 
-    int debug;  // DEBUG: type == define_enum() のtypoを修正したところから
-
-    // read (int|char) "*"*
+    // if any type is not found so far yet,
+    // try to read (("int" | "char") "*"* | "void")
     if (type == NULL) {
         Token* typeToken = consume_kind(TK_TYPE);
         if (typeToken == NULL) {
@@ -1345,6 +1346,7 @@ Define* read_define_head() {
         type = calloc(1, sizeof(Type));
         int isChar = memcmp("char", typeToken->str, typeToken->len) == 0;
 
+        // NOTE: handle void as an alias of int in this compiler.
         type->ty = isChar ? CHAR : INT;
     }
     while (consume("*")) {
@@ -1365,7 +1367,7 @@ Define* read_define_head() {
     // TODO: refactor
     if (tok == NULL && type->ty != STRUCT && !is_enum) {
         print_type(type);
-        error("ident should come here.");
+        error0("ident should come here.");
     }
 
     Define* def = calloc(1, sizeof(Define));
@@ -1378,7 +1380,7 @@ Define* read_define_head() {
 // Defineのtypeに配列情報を付け加える. つまり型定義のsuffix部分をみる
 void read_define_suffix(Define* def) {
     if (def == NULL) {
-        error("invalid definition of function or variable");
+        error0("invalid definition of function or variable");
     }
 
     Type* type = def->type;

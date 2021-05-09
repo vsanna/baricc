@@ -290,13 +290,13 @@ void gen(Node* node) {
             return;
         case ND_BREAK:
             if (break_sequence == 0) {
-                error("currently not in for, while");
+                error0("currently not in for, while");
             }
             printf("  jmp .Lend%d\n", break_sequence);
             return;
         case ND_CONTINUE:
             if (continue_sequence == 0) {
-                error("currently not in for, while");
+                error0("currently not in for, while");
             }
             printf("  jmp .Lcontinue%d\n", continue_sequence);
             return;
@@ -483,7 +483,7 @@ void gen(Node* node) {
                 num_args++;
             }
             if (num_args > 6) {
-                error_at(token->str, "invalid number of args. lteq 6.");
+                error_at0(token->str, "invalid number of args. lteq 6.");
             }
 
             // 引数を"後ろから"ABI指定のregisterに投入
@@ -716,6 +716,6 @@ void gen_val(Node* node) {
         printf("  add rax, %d\n", node->member->offset);
         printf("  push rax\n");
     } else {
-        error("not variable");
+        error0("not variable");
     }
 }

@@ -249,8 +249,14 @@ struct EnumVar {
 
 // util
 void print_token(Token* token);
-void error_at(char* loc, char* fmt, ...);
-void error(char* fmt, ...);
+// TODO: support rest parameter..
+// void error_at(char* loc, char* fmt, ...);
+void error_at0(char* loc, char* fmt);
+void error_at1(char* loc, char* fmt, char* val);
+void error_at2(char* loc, char* fmt, char* val1, char* val2);
+void error0(char* fmt);
+void error1(char* fmt, char* val);
+void error2(char* fmt, char* val1, char* val2);
 
 void print_type(Type* type);
 void print_node(Node* node);

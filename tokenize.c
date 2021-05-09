@@ -41,7 +41,7 @@ void expect(char *op) {
         memcmp(token->str, op, token->len)) {
         char *tmp[100] = {0};
         memcpy(tmp, token->str, token->len);
-        error_at(token->str, "expected: '%c'\nactual: '%s'\n", *op, tmp);
+        error_at2(token->str, "expected: '%c'\nactual: '%s'\n", *op, tmp);
     }
     advance_token();
     return;
@@ -52,7 +52,7 @@ void expect(char *op) {
 int expect_number() {
     if (token->kind != TK_NUM) {
         int debug;
-        error_at(token->str, "数ではありません\n");
+        error_at0(token->str, "数ではありません\n");
     }
     int val = token->val;
     advance_token();
@@ -98,12 +98,15 @@ typedef struct ReservedWord {
 } ReservedWord;
 
 ReservedWord reserved_words[] = {
-    {"return", TK_RETURN},     {"if", TK_IF},         {"else", TK_ELSE},
-    {"while", TK_WHILE},       {"for", TK_FOR},       {"int", TK_TYPE},
-    {"char", TK_TYPE},         {"sizeof", TK_SIZEOF}, {"struct", TK_STRUCT},
-    {"typedef", TK_TYPEDEF},   {"enum", TK_ENUM},     {"break", TK_BREAK},
-    {"continue", TK_CONTINUE}, {"switch", TK_SWITCH}, {"case", TK_CASE},
-    {"default", TK_DEFAULT},   {"", TK_EOF},
+    {"return", TK_RETURN},   {"if", TK_IF},
+    {"else", TK_ELSE},       {"while", TK_WHILE},
+    {"for", TK_FOR},         {"int", TK_TYPE},
+    {"void", TK_TYPE},       {"char", TK_TYPE},
+    {"sizeof", TK_SIZEOF},   {"struct", TK_STRUCT},
+    {"typedef", TK_TYPEDEF}, {"enum", TK_ENUM},
+    {"break", TK_BREAK},     {"continue", TK_CONTINUE},
+    {"switch", TK_SWITCH},   {"case", TK_CASE},
+    {"default", TK_DEFAULT}, {"", TK_EOF},
 };
 
 // 入力文字列pをトークない頭してそれを返す
@@ -138,7 +141,7 @@ Token *tokenize() {
         if (startswith(p, "/*")) {
             char *q = strstr(p + 2, "*/");
             if (!q) {
-                error_at(p, "block comment is not closed.\n");
+                error_at0(p, "block comment is not closed.\n");
             }
             p = q + 2;
             continue;
@@ -214,7 +217,7 @@ Token *tokenize() {
             continue;
         }
 
-        error_at(token->str, "トークナイズできません");
+        error_at0(token->str, "トークナイズできません");
     }
 
     // print_token(cur);

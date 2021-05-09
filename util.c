@@ -5,16 +5,16 @@ char *filename;
 char *read_file(char *path) {
     FILE *fp = fopen(path, "r");
     if (!fp) {
-        error("cannot open %s: %s", path, strerror(errno));
+        error2("cannot open %s: %s", path, strerror(errno));
     }
 
     // ファイルサイズを調べる
     if (fseek(fp, 0, SEEK_END) == -1) {
-        error("%s: fseek: %s", path, strerror(errno));
+        error2("%s: fseek: %s", path, strerror(errno));
     }
     size_t size = ftell(fp);
     if (fseek(fp, 0, SEEK_SET) == -1) {
-        error("%s: fseek: %s", path, strerror(errno));
+        error2("%s: fseek: %s", path, strerror(errno));
     }
 
     // ファイルを読み込む
@@ -95,18 +95,24 @@ void print_node(Node *node) {
     }
 }
 
-void error(char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
+void error0(char *fmt) {
+    fprintf(stderr, fmt);
     fprintf(stderr, "\n");
     exit(1);
 }
 
-void error_at(char *loc, char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
+void error1(char *fmt, char *val) {
+    fprintf(stderr, fmt, val);
+    fprintf(stderr, "\n");
+    exit(1);
+}
+void error2(char *fmt, char *val1, char *val2) {
+    fprintf(stderr, fmt, val1, val2);
+    fprintf(stderr, "\n");
+    exit(1);
+}
 
+void error_at0(char *loc, char *fmt) {
     // locが含まれている行の開始地点と終了地点を取得
     char *line = loc;
     while (user_input < line && line[-1] != '\n') line--;
@@ -126,6 +132,54 @@ void error_at(char *loc, char *fmt, ...) {
     // エラー箇所を"^"で指し示して、エラーメッセージを表示
     int pos = loc - line + indent;
     fprintf(stderr, "%*s", pos, "");  // pos個の空白を出力
-    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, fmt);
+    exit(1);
+}
+
+void error_at1(char *loc, char *fmt, char *val) {
+    // locが含まれている行の開始地点と終了地点を取得
+    char *line = loc;
+    while (user_input < line && line[-1] != '\n') line--;
+
+    char *end = loc;
+    while (*end != '\n') end++;
+
+    // 見つかった行が全体の何行目なのかを調べる
+    int line_num = 1;
+    for (char *p = user_input; p < line; p++)
+        if (*p == '\n') line_num++;
+
+    // 見つかった行を、ファイル名と行番号と一緒に表示
+    int indent = fprintf(stderr, "%s:%d: ", filename, line_num);
+    fprintf(stderr, "%.*s\n", (int)(end - line), line);
+
+    // エラー箇所を"^"で指し示して、エラーメッセージを表示
+    int pos = loc - line + indent;
+    fprintf(stderr, "%*s", pos, "");  // pos個の空白を出力
+    fprintf(stderr, fmt, val);
+    exit(1);
+}
+
+void error_at2(char *loc, char *fmt, char *val1, char *val2) {
+    // locが含まれている行の開始地点と終了地点を取得
+    char *line = loc;
+    while (user_input < line && line[-1] != '\n') line--;
+
+    char *end = loc;
+    while (*end != '\n') end++;
+
+    // 見つかった行が全体の何行目なのかを調べる
+    int line_num = 1;
+    for (char *p = user_input; p < line; p++)
+        if (*p == '\n') line_num++;
+
+    // 見つかった行を、ファイル名と行番号と一緒に表示
+    int indent = fprintf(stderr, "%s:%d: ", filename, line_num);
+    fprintf(stderr, "%.*s\n", (int)(end - line), line);
+
+    // エラー箇所を"^"で指し示して、エラーメッセージを表示
+    int pos = loc - line + indent;
+    fprintf(stderr, "%*s", pos, "");  // pos個の空白を出力
+    fprintf(stderr, fmt, val1, val2);
     exit(1);
 }

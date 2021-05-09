@@ -40,11 +40,15 @@ $ bash -x ./test.sh
 ```
 
 ## supported feature
-- +-*/
+- +, -, *, /
 - ==, !=, <, >, <=, >=
-- || &&
+- !
+- ||, &&
+- a++, a--, ++a, --a
+- bit: ~, |, &, ^
 - for, while, if
 - int, char
+- void(implemented roughly)
 - pointer: ref, deref
 - array
 - sizeof
@@ -52,17 +56,18 @@ $ bash -x ./test.sh
 - struct
 - break
 - continue
-- a++, a--, ++a, --a
-- bit: ~, |, &, ^
-- !
+- witch
+- escape in string
+- #include
+    - this compiler doesn't support #include directly, but you can use #include.
+    - this compiler just ignores #include statements and rely on other linkers/copmilers.
 
 
-- [ ] switch
 - [ ] nested type
-- [ ] #include
-- [ ] escape
+- [ ] typedef struct A A;
 - [ ] ternary operator
 - [ ] rest parameters
 - [ ] static
 - [ ] ++, -- のptr対応
+- [ ] macro
 

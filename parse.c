@@ -759,15 +759,64 @@ Node* unary() {
         // when pure type is passed
         if ((check("(") && token->next->kind == TK_TYPE) ||
             check_kind(TK_TYPE)) {
-            consume("(");
-            char* name[100] = {0};
+            bool has_brace = false;
+            if (consume("(")) {
+                has_brace = true;
+            }
+            char* name = calloc(100, sizeof(char));
             memcpy(name, token->str, token->len);
-            if (name == "int") {
-                return new_num(get_type_size(int_type()));
-            } else if (name == "char") {
-                return new_num(get_type_size(char_type()));
+
+            consume_kind(TK_TYPE);
+
+            Node* size_of_type;
+            if (strcmp(name, "int") == 0) {
+                size_of_type = new_num(get_type_size(int_type()));
+            } else if (strcmp(name, "char") == 0) {
+                size_of_type = new_num(get_type_size(char_type()));
             } else {
-                error("invalid type name is passed here. %s", name);
+                error1("invalid type name is passed here. %s", name);
+            }
+            if (has_brace) consume(")");
+            return size_of_type;
+        }
+
+        // when struct / enum is passed
+        if ((check("(") && (token->next->kind == TK_ENUM ||
+                            token->next->kind == TK_STRUCT)) ||
+            (check_kind(TK_ENUM) || check_kind(TK_STRUCT))) {
+            bool has_brace = false;
+            if (consume("(")) {
+                has_brace = true;
+            }
+            Define* def = read_define_head();
+            // read_define_suffix(def);
+            Node* size_of_type = new_num(get_type_size(def->type));
+
+            if (has_brace) consume(")");
+            return size_of_type;
+        }
+
+        // when tag is pssed
+        if ((check("(") && token->next->kind == TK_IDENT) ||
+            (check_kind(TK_IDENT))) {
+            bool has_brace = false;
+            Tag* tag;
+            if (check("(")) {
+                tag = find_tag(token->next);
+                if (tag) {
+                    consume("(");
+                }
+                has_brace = true;
+            } else {
+                tag = find_tag(token);
+            }
+
+            if (tag) {
+                consume_kind(TK_IDENT);
+                Node* size_of_type = new_num(get_type_size(tag->type));
+
+                if (has_brace) consume(")");
+                return size_of_type;
             }
         }
 

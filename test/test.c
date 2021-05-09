@@ -254,32 +254,47 @@ int test_pointer_calc() {
 int test_sizeof() {
     int x;
     assert(4, sizeof(x));
+    assert(4, sizeof x);
 
     int *y;
     assert(8, sizeof(y));
+    assert(8, sizeof y);
 
+    assert(8, sizeof(y + 3));
     assert(8, sizeof(y + 3));
 
     assert(4, sizeof(*y));
 
     assert(4, sizeof(1));
+    assert(4, sizeof 1);
 
     assert(4, sizeof(int));
     assert(1, sizeof(char));
 
-    // struct SizeOfTest {
-    //     int a;
-    //     char b;
-    // } a;
+    assert(4, sizeof int);
+    assert(1, sizeof char);
 
-    // struct
-    // TODO 要確認
-    // assert(8, sizeof(a));
-    // assert(8, sizeof(struct SizeOfTest));
+    struct SizeOfTest {
+        int a;
+        char b;
+    } a;
+
+    // // struct
+    // // TODO 要確認
+    assert(8, sizeof(a));
+    assert(8, sizeof(struct SizeOfTest));
+    assert(12, sizeof(struct Hoge4 {
+               int a;
+               char b;
+               int c;
+           }));
 
     // typedef
-    // assert(4, sizeof(Int));
-    // assert(8, sizeof(String));
+    assert(4, sizeof(Int));
+    assert(8, sizeof(String));
+
+    assert(4, sizeof Int);
+    assert(8, sizeof String);
 }
 
 int test_array() {

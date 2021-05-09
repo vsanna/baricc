@@ -446,29 +446,33 @@ Node* block() {
 // expr ::= assign
 Node* expr() { return assign(); }
 
+// ココよりも下は代入の=の左辺 or 右辺. つまり一般的な式に相当するもの.
+// TODO: exprをココで使いたい...が、cでは代入が式である
 // assign ::= equality ("=" equality)?
 Node* assign() {
-    Node* node = logor();
+    Node* node = conditional();
 
     if (consume("=")) {
-        node = new_binary(ND_ASSIGN, node, logor());
+        node = new_binary(ND_ASSIGN, node, conditional());
         return node;
     }
 
     if (consume("+=")) {
-        Node* add = new_binary(ND_ADD, node, ptr_conversion(node, logor()));
+        Node* add =
+            new_binary(ND_ADD, node, ptr_conversion(node, conditional()));
         node = new_binary(ND_ASSIGN, node, add);
         return node;
     }
 
     if (consume("-=")) {
-        Node* sub = new_binary(ND_SUB, node, ptr_conversion(node, logor()));
+        Node* sub =
+            new_binary(ND_SUB, node, ptr_conversion(node, conditional()));
         node = new_binary(ND_ASSIGN, node, sub);
         return node;
     }
     if (consume("*=")) {
         Node* mul = new_node(ND_MUL);
-        Node* right = logor();
+        Node* right = conditional();
         mul->lhs = node;
         mul->rhs = right;
         node = new_binary(ND_ASSIGN, node, mul);
@@ -476,11 +480,33 @@ Node* assign() {
     }
     if (consume("/=")) {
         Node* div = new_node(ND_DIV);
-        Node* right = logor();
+        Node* right = conditional();
         div->lhs = node;
         div->rhs = right;
         node = new_binary(ND_ASSIGN, node, div);
         return node;
+    }
+
+    return node;
+}
+
+// conditional = logor ? logor : logor
+Node* conditional() {
+    Node* node = logor();
+    if (consume("?")) {
+        Node* cond = node;
+        Node* then = logor();
+        expect(":");
+        Node* alt = logor();
+
+        Node* els = new_node(ND_ELSE);
+        els->lhs = then;
+        els->rhs = alt;
+        Node* ternary = new_node(ND_TERNARY);
+        ternary->lhs = cond;
+        ternary->rhs = els;
+
+        node = ternary;
     }
 
     return node;

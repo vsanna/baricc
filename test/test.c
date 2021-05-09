@@ -621,10 +621,14 @@ int test_and_or() {
     assert(0, (2 - 2) && (5 || 3));  // 0000, 0101, 0011
 }
 
-// int test_ternary() {
-//     assert(2, 0 ? 1 : 2);
-//     assert(1, 1 ? 1 : 2);
-// }
+int test_ternary() {
+    assert(2, 0 ? 1 : 2);
+    assert(1, 1 ? 1 : 2);
+
+    int flag = 0;
+    int result = flag ? 1 : 100;
+    assert(100, result);
+}
 
 // int test_switch() {
 //     int i = 0;
@@ -758,7 +762,7 @@ int main() {
     test_pp();
     test_bit();
     test_and_or();
-    // test_ternary();
+    test_ternary();
     // test_switch();
     // test_void();
     // test_nest_types();

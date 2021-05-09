@@ -56,6 +56,7 @@ void gen(Node* node) {
             printf("  jne .Ltrue%d\n", id);
             printf("  push 0\n");
             printf("  jmp .Lend%d\n", id);
+            // cond == falseなので0をpush
             printf(".Ltrue%d:\n", id);
             printf("  push 1\n");
             printf(".Lend%d:\n", id);
@@ -324,6 +325,35 @@ void gen(Node* node) {
                 printf("  jmp .Lend%d\n", id);
                 printf(".Lelse%d:\n", id);
             }
+
+            printf(".Lend%d:\n", id);
+
+            // TODO: 今の実装だとif文は最後に評価した値をstackに持ってる
+            // if式にするならこのままでもよい
+            return;
+        case ND_TERNARY:
+            /*
+                # ifとの違い
+                - 評価結果をstackにpushするところがifとの違い
+                - elseが常にある
+            */
+
+            if_sequence++;
+            // lhs: cond
+            // rhs: stmt(main) or else(lhs=main, rhs=alt)
+
+            // cond
+            gen(node->lhs);
+            printf("  pop rax\n");
+            printf("  cmp rax, 0\n");
+            printf("  je .Lelse%d\n", id);
+
+            Node* els = node->rhs;
+            gen(els->lhs);  // then
+            printf("  jmp .Lend%d\n", id);
+            printf(".Lelse%d:\n", id);
+            gen(els->rhs);  // alt
+            printf("  jmp .Lend%d\n", id);
 
             printf(".Lend%d:\n", id);
             return;

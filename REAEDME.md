@@ -42,6 +42,7 @@ $ bash -x ./test.sh
 ## supported feature
 - +-*/
 - ==, !=, <, >, <=, >=
+- || &&
 - for, while, if
 - int, char
 - pointer: ref, deref
@@ -63,6 +64,5 @@ $ bash -x ./test.sh
 - [ ] ternary operator
 - [ ] rest parameters
 - [ ] static
-- [ ] || &&
 - [ ] ++, -- のptr対応
 

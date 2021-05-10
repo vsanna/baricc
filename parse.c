@@ -71,7 +71,7 @@ void program() {
             continue;
         }
 
-        // TODO: if(check_kind(TK_STRUCT)) would be better. will align with code above
+        // DEBUG: if(check_kind(TK_STRUCT)) would be better. will align with code above
 
         // top level statements which start with type + ident, like "int* hoge"
         // three types of such statements.
@@ -79,6 +79,7 @@ void program() {
         // 2. struct def: struct Hoge {} ... this should be placed before this section. if (check_kind(TK_STRUCT)) is better.
         // 3. global var def: int hoge = 1;
         Define* def = read_define_head();
+
         if (def == NULL) {
             print_token(token);
             error0("def is NULL");
@@ -91,11 +92,35 @@ void program() {
                 continue;
             }
         } else if (def->type->ty == STRUCT) {
-            define_struct();
-            expect(";");
-            continue;
+            /*
+            valid:
+            struct Hoge {int a;} hoge;
+            struct Hoge {int a;} hoge = {1};
+            Hoge hoge;
+            Hoge hoge[] = {};
+
+            invalid:
+            struct {int a;} hoge;
+            struct {int a;} hoge = {1};
+            struct Hoge {int a;}[] a;  ... we cannot define array of struct in oneline.
+            */
+            if (check("[")) {
+                // Hoge hoge[] pattern.
+                Node* gvar = define_variable(def, globals);
+
+                // TODO: refactor: should change kind in other place.
+                gvar->kind = ND_GVAR_DEF;
+                code[i] = gvar;
+                expect(";");
+            } else {
+                // struct Hoge {int a;};
+                define_struct();
+                expect(";");
+                continue;
+            }
         } else {
             Node* gvar = define_variable(def, globals);
+
             // TODO: refactor: should change kind in other place.
             gvar->kind = ND_GVAR_DEF;
             code[i] = gvar;
@@ -208,9 +233,6 @@ Type* define_struct() {
     // TODO: 定義済みならそのoverrideを許さず、{}が続いたらエラー
     if (name && !check("{")) {
         Tag* tag = find_or_register_tag(name);
-        // if (!tag) {
-        //     error0("type not found.");
-        // }
         // TODO: ここでdummyのときにINTが変えることがおかしい. むりやりSTRUCTにここで変えてしまう
         tag->type->ty = STRUCT;
         return tag->type;
@@ -349,8 +371,10 @@ Node* stmt() {
 
     if (consume_kind(TK_RETURN)) {
         node = new_node(ND_RETURN);
-        node->lhs = expr();  // lhsだけ持つとする
-        expect(";");
+        if (!consume(";")) {
+            node->lhs = expr();  // lhsだけ持つとする
+            expect(";");
+        }
         return node;
     }
 
@@ -457,8 +481,9 @@ Node* stmt() {
 
         expect("(");
         if (!consume(";")) {
-            left->lhs = expr();
-            expect(";");
+            // To allow variable declaration, using stmt.
+            // TODO: modify stmt not to allow if/while in this part
+            left->lhs = stmt();
         }
 
         if (!consume(";")) {
@@ -677,25 +702,9 @@ Node* add() {
 
     for (;;) {
         if (consume("+")) {
-            // if (node->type != NULL && node->type->ptr_to != NULL) {
-            //     int size_of_type = get_type_size(node->type->ptr_to);
-            //     node = new_binary(
-            //         ND_ADD, node,
-            //         new_binary(ND_MUL, mul(), new_num(size_of_type)));
-            // } else {
-            //     node = new_binary(ND_ADD, node, mul());
-            // }
             node = new_binary(ND_ADD, node, ptr_conversion(node, mul()));
         } else if (consume("-")) {
             node = new_binary(ND_SUB, node, ptr_conversion(node, mul()));
-            // if (node->type != NULL && node->type->ptr_to != NULL) {
-            //     int size_of_type = get_type_size(node->type->ptr_to);
-            //     node = new_binary(
-            //         ND_SUB, node,
-            //         new_binary(ND_MUL, mul(), new_num(size_of_type)));
-            // } else {
-            //     node = new_binary(ND_SUB, node, mul());
-            // }
         } else {
             return node;
         }
@@ -856,10 +865,16 @@ Node* primary() {
         return node;
     }
 
+    // when next token is "{", it's a initializer of struct.
+    if (check("{")) {
+        Node* node = initializer(NULL);
+        return node;
+    }
+
     // ident
     Token* tok = consume_kind(TK_IDENT);
     if (tok) {
-        // 関数呼び出しの場合
+        // when func call
         if (consume("(")) {
             // node->blockに引数となるexprを詰める
             Node* node = new_node(ND_FUNC_CALL);
@@ -877,17 +892,38 @@ Node* primary() {
             return node;
         }
 
-        // enumの値がきたとき
+        // whne enum
         Node* num = find_enum_var(tok);
         if (num) {
             return num;
         }
 
-        // TODO: type alias の場合
-        // 変数定義と変数代入を両方やる
-
-        // 変数呼び出しの場合
+        // calling variable
         return variable(tok);
+    }
+
+    // predefined const variable. they are treated as pure int.
+    // it's also fine to add codes in gen to evaluate these token..
+    if (consume_kind(TK_TRUE)) {
+        return new_num(1);
+    }
+    if (consume_kind(TK_FALSE)) {
+        return new_num(0);
+    }
+    if (consume_kind(TK_NULL)) {
+        return new_num(0);
+    }
+    if (consume_kind(TK_SEEKEND)) {
+        return new_num(2);
+    }
+    if (consume_kind(TK_SEEKCUR)) {
+        return new_num(1);
+    }
+    if (consume_kind(TK_SEEKSET)) {
+        return new_num(0);
+    }
+    if (consume_kind(TK_ERRNO)) {
+        return new_num(0);
     }
 
     // string
@@ -911,173 +947,6 @@ Node* primary() {
     return new_num(expect_number());
 }
 
-// stmtの一つ. 変数を宣言する.
-// ND_LVARを返しつつ、LVarを作ってlocalsに追加する
-// TODO: これは意味解析も一緒にやっちゃってないか? それはいいの?
-// TODO: scopeが異なる変数が見つかった場合はエラーではないが,
-// 同一scopeで見つかったらエラーみたいなことをするにはまたロジックを考える必要がある
-// TODO: block切って同名/別型変数を宣言したときに既存言語でエラーになるかどうか
-// NOTE: 型宣言の最初にいる状態で呼ばれる. *とidentの処理を行う
-// define_variable = "int" "*"* ident ("=" 初期化式)
-//                                    ^start/end
-//                 | "int" "*"* ident "[" number "]" ("=" 初期化式)
-//                                    ^start        ^end
-Node* define_variable(Define* def, LVar** varlist) {
-    if (def == NULL) {
-        print_token(token);
-        error0("invalid definition of function or variable");
-    }
-
-    read_define_suffix(def);
-
-    Type* type = def->type;
-    Token* tok = def->ident;
-
-    Node* init = NULL;
-    if (consume("=")) {
-        /*
-        TODO: なぜassignにせずにinitをもたせる形にしたのか...
-        なぜならアセンブラとして吐き出したいコードがぜんぜん違うから。
-        - assign: 左辺のアドレスをpush -> 右辺を評価 -> 右辺の値をpush -> 左辺のアドレスに右辺の値をmov
-        - globalのinit: .data領域に書き込み
-        - localのinit: 初期化式でのみ使える表現がある. よってだめ.
-
-        > 初期化式は一見ただの代入式のように見えますが、実際は初期化式と代入式は文法的にかなり異なっていて、
-        > 初期化式だけに許された特別な書き方というものがいくつかあります。
-        > ここでその特別な書き方をきちんと把握しておきましょう。
-        */
-        if (consume("{")) {
-            // TODO 最大100要素まで
-            init = calloc(1, sizeof(Node));
-            init->block = calloc(100, sizeof(Node));
-            int i = 0;
-            for (; !consume("}"); i++) {
-                if (i != 0) {
-                    expect(",");
-                }
-
-                init->block[i] = expr();
-            }
-            // 初期化子の数のほうがサイズよりも大きい場合はそちらでうわがく
-            if (type->array_size < i) {
-                type->array_size = i;
-            }
-
-            // int a[5] = {5} のとき
-            // この時点で i = 1
-            // array_size = 5
-
-            // 不足分の要素を埋める
-            for (; i < type->array_size; i++) {
-                init->block[i] = new_num(0);
-            }
-        } else {
-            init = expr();
-            if (init->kind == ND_STRING) {
-                int len = strlen(init->string->value) + 1;
-                if (type->array_size < len) {
-                    type->array_size = len;
-                }
-            }
-        }
-    }
-    int size = get_type_size(type);
-
-    Node* node = new_node(ND_LVAR);
-    LVar* var = find_variable(tok);
-
-    node->varname = calloc(100, sizeof(char));
-    memcpy(node->varname, tok->str, tok->len);
-    node->varsize = size;
-
-    // 新規変数の定義なのでlvarあってはこまる
-    if (var) {
-        error1("redefining variable %s", node->varname);
-    }
-
-    // 新規変数なのでlvarを追加する
-    var = calloc(1, sizeof(LVar));
-    var->next = varlist[cur_scope_depth];
-    var->name = tok->str;
-    var->len = tok->len;
-    var->type = type;
-    var->kind = (varlist == locals) ? LOCAL : GLOBAL;
-    var->init = init;
-
-    // TODO: きれいにする
-    int scope_depth = varlist == locals ? cur_scope_depth : 0;
-    if (varlist[scope_depth] == NULL) {
-        var->offset = size;
-    } else {
-        var->offset = varlist[scope_depth]->offset + size;
-    }
-    varlist[scope_depth] = var;
-
-    // nodeを完成させる
-    node->offset = varlist[scope_depth]->offset;
-    node->type = type;
-    node->kind = (var->kind == LOCAL) ? ND_LVAR : ND_GVAR;
-    node->var = var;
-    return node;
-}
-
-// Node* initializer(Type* type, int* size) {
-//     Node* init = NULL;
-//     if (consume("=")) {
-//         /*
-//         TODO: なぜassignにせずにinitをもたせる形にしたのか...
-//         なぜならアセンブラとして吐き出したいコードがぜんぜん違うから。
-//         - assign: 左辺のアドレスをpush -> 右辺を評価 -> 右辺の値をpush -> 左辺のアドレスに右辺の値をmov
-//         - globalのinit: .data領域に書き込み
-//         - localのinit: 初期化式でのみ使える表現がある. よってだめ.
-
-//         > 初期化式は一見ただの代入式のように見えますが、実際は初期化式と代入式は文法的にかなり異なっていて、
-//         > 初期化式だけに許された特別な書き方というものがいくつかあります。
-//         > ここでその特別な書き方をきちんと把握しておきましょう。
-//         */
-//         if (consume("{")) {
-//             // TODO 最大100要素まで
-//             init = calloc(1, sizeof(Node));
-//             init->block = calloc(100, sizeof(Node));
-//             int i = 0;
-//             for (; !consume("}"); i++) {
-//                 if (i != 0) {
-//                     expect(",");
-//                 }
-
-//                 init->block[i] = expr();
-//             }
-//             // 初期化子の数のほうがサイズよりも大きい場合はそちらでうわがく
-//             if (type->array_size < i) {
-//                 type->array_size = i;
-//             }
-
-//             // 不足分の要素を埋める
-//             i++;
-//             for (; i < type->array_size; i++) {
-//                 init->block[i] = new_num(0);
-//             }
-//         } else {
-//             init = expr();
-//             if (init->kind == ND_STRING) {
-//                 int len = type->array_size = strlen(init->string->value) + 1;
-//                 if (type->array_size < len) {
-//                     type->array_size = len;
-//                 }
-//             }
-//         }
-//     }
-
-//     if (type->ty == ARRAY) {
-//         if (type->array_size == 0) {
-//             error1("array size is not defined.\n");
-//         }
-//         *size *= type->array_size;
-//     }
-
-//     return init;
-// }
-
 // a[1] ==> *(a+1)
 // variable = ident ("[" num "]")?
 //            ^start
@@ -1099,18 +968,23 @@ Node* variable(Token* tok) {
     node->varname = calloc(100, sizeof(char));
     memcpy(node->varname, tok->str, tok->len);
 
+    Type* tp_backup = node->type;
     Type* tp = node->type;
-    bool has_index = false;
 
     // a.b[0]->c[2][4]
     while (true) {
+        bool has_index = false;
+        if (node->type && (node->type->ty == ARRAY || node->type->ty == PTR)) {
+            int debug = 1;
+        }
         while (consume("[")) {
             has_index = true;
             // a[3] は *(a + 3) にする
             // DEREF -- ADD -- a
             //              -- MUL -- 3(expr)
             //                     -- sizeof(a)
-
+            //
+            // a[2][3] -> *( *(a + 2) + 2 )
             // 大きな1歩の中に小さな2歩
             // (a + 1)はあどれすで、[a + 1]が示す値もアドレス
             // int a[n][m]; にたいして、 a[1][2]を取得するには
@@ -1119,27 +993,31 @@ Node* variable(Token* tok) {
             Node* add = new_node(ND_ADD);
             add->lhs = node;  // 変数
 
-            Node* index_val = new_num(expect_number());
+            Node* index_val = expr();
 
             // NOTE:
             // ここのtype_sizeでみるのは要素のサイズなので常にptr_to一個先をみる
             add->rhs = new_binary(ND_MUL, index_val,
                                   new_num(get_type_size(tp->ptr_to)));
+            tp_backup = tp;
             tp = tp->ptr_to;
             // TODO: node(ND_LVAR)のtypeが配列のままなのにptrになっちゃってない?
             node = add;
+            node->type = tp;
             expect("]");
-            continue;
         }
         if (has_index) {
             Node* deref_node = new_node(ND_DEREF);
             deref_node->lhs = node;
             node = deref_node;
+            node->type = tp;
+            continue;
         }
 
         // memberアクセス
         while (consume(".")) {
             node = struct_ref(node);
+            tp = node->type;
             continue;
         }
 
@@ -1154,6 +1032,8 @@ Node* variable(Token* tok) {
             deref->type =
                 t;  // deref node に structをセット. この時点でderefはa.bと同じ構造に変換されてる
             node = struct_ref(deref);
+            tp = node->type;
+            int debug;
             continue;
         }
 
@@ -1174,16 +1054,124 @@ Node* variable(Token* tok) {
     return node;
 }
 
+// stmtの一つ. 変数を宣言する.
+// ND_LVARを返しつつ、LVarを作ってlocalsに追加する
+// TODO: これは意味解析も一緒にやっちゃってないか? それはいいの?
+// TODO: scopeが異なる変数が見つかった場合はエラーではないが,
+// 同一scopeで見つかったらエラーみたいなことをするにはまたロジックを考える必要がある
+// TODO: block切って同名/別型変数を宣言したときに既存言語でエラーになるかどうか
+// NOTE: 型宣言の最初にいる状態で呼ばれる. *とidentの処理を行う
+// define_variable = "int" "*"* ident ("=" 初期化式)
+//                                    ^start/end
+//                 | "int" "*"* ident "[" number "]" ("=" 初期化式)
+//                                    ^start        ^end
+Node* define_variable(Define* def, LVar** varlist) {
+    if (def == NULL) {
+        print_token(token);
+        error0("invalid definition of function or variable");
+    }
+    int scope_depth = varlist == locals ? cur_scope_depth : 0;
+    LVar* varlist_to_use = varlist[scope_depth];
+
+    read_define_suffix(def);
+
+    Type* type = def->type;
+    Token* tok = def->ident;
+
+    Node* init = NULL;
+    if (consume("=")) {
+        init = initializer(type);
+    }
+
+    int size = get_type_size(type);
+
+    Node* node = new_node(ND_LVAR);
+    LVar* var = find_variable(tok);
+
+    node->varname = calloc(100, sizeof(char));
+    memcpy(node->varname, tok->str, tok->len);
+    node->varsize = size;
+
+    if (var) {
+        // TODO because scope is not implemented yet.
+        // It should not be allowed to redefine variable in general.
+        // error1("redefining variable %s", node->varname);
+    }
+
+    // register a new lvar.
+    var = calloc(1, sizeof(LVar));
+    var->next = varlist_to_use;
+    var->name = tok->str;
+    var->len = tok->len;
+    var->type = type;
+    var->kind = (varlist == locals) ? LOCAL : GLOBAL;
+    var->init = init;
+
+    // TODO: clearnup
+    if (varlist_to_use == NULL) {
+        var->offset = size;
+    } else {
+        var->offset = varlist_to_use->offset + size;
+    }
+    varlist[scope_depth] = var;
+
+    // nodeを完成させる
+    node->offset = varlist[scope_depth]->offset;
+    node->type = type;
+    node->kind = (var->kind == LOCAL) ? ND_LVAR : ND_GVAR;
+    node->var = var;
+    return node;
+}
+
+// initializer ::= num | string | char | { (expr ("," expr)*)? }
+// when type null, it means the type doesn't need to modify its array_size
+Node* initializer(Type* type) {
+    Node* init = NULL;
+
+    if (consume("{")) {
+        // TODO: currently we can have at most only 100 items
+        init = calloc(1, sizeof(Node));
+        init->block = calloc(100, sizeof(Node));
+        int i = 0;
+        for (; !consume("}"); i++) {
+            init->block[i] = expr();
+            consume(",");
+        }
+
+        if (type) {
+            // when size of initializer is larger than array_size, override the array_size
+            if (type->array_size < i) {
+                type->array_size = i;
+            }
+
+            // when `int a[5] = {5}1
+            // fill empty items as zero value
+            for (; i < type->array_size; i++) {
+                init->block[i] = new_num(0);
+            }
+        }
+    } else {
+        init = expr();
+        if (init->kind == ND_STRING) {
+            int len = strlen(init->string->value) + 1;
+            if (type->array_size < len) {
+                type->array_size = len;
+            }
+        }
+    }
+
+    return init;
+}
+
 // memberアクセス
 Node* struct_ref(Node* node) {
     Node* member = new_node(ND_MEMBER);
     member->lhs = node;  // ベースオブジェクト
-    member->member =
-        find_member(consume_kind(TK_IDENT), node->type);  // 取得したいmember
+
+    // get a member to access
+    member->member = find_member(consume_kind(TK_IDENT), node->type);
     member->type = member->member->ty;
-    node =
-        member;  // ND_MEMBERはbaseのアドレス+memberのoffsetをpushするアセンブラを生成する
-    return node;
+    return member;
 }
 
 // type(struct想定)がもつmemberの中で、tokを名前に持つものを返す
@@ -1196,8 +1184,6 @@ Member* find_member(Token* tok, Type* type) {
     }
 
     if (type->ty != STRUCT) {
-        print_token(tok);
-        print_type(type);
         error0("this type doesn't have members.");
     }
 
@@ -1215,9 +1201,18 @@ Member* find_member(Token* tok, Type* type) {
 
 // まずlocal変数を探してなければglobal変数を探す
 LVar* find_variable(Token* tok) {
+    // char* tmp[100] = {0};
+    // memcpy(tmp, tok->str, tok->len);
+    // fprintf(stderr, "[DEBUG] looking up variable: %s\n", tmp);
+
     for (LVar* var = locals[cur_scope_depth]; var; var = var->next) {
         // NOTE: memcmpは一致していたら0を返す
+        // char* tmp2[100] = {0};
+        // memcpy(tmp2, var->name, var->len);
+        // fprintf(stderr, "[DEBUG] comparing local token: %s and var: %s\n", tmp,
+        //         tmp2);
         if (var->len == tok->len && !memcmp(tok->str, var->name, var->len)) {
+            // fprintf(stderr, "[DEBUG] found local variable: %s\n", tmp);
             var->kind = LOCAL;
             return var;
         }
@@ -1226,11 +1221,18 @@ LVar* find_variable(Token* tok) {
     // TODO: globalsを配列でなくしてこの添字を消す
     for (LVar* var = globals[0]; var; var = var->next) {
         // NOTE: memcmpは一致していたら0を返す
+        // char* tmp2[100] = {0};
+        // memcpy(tmp2, var->name, var->len);
+        // fprintf(stderr, "[DEBUG] comparing global token: %s and var: %s\n", tmp,
+        //         tmp2);
         if (var->len == tok->len && !memcmp(tok->str, var->name, var->len)) {
+            // fprintf(stderr, "[DEBUG] found global variable: %s\n", tmp);
             var->kind = GLOBAL;
             return var;
         }
     }
+    // fprintf(stderr, "[DEBUG] not found variable: %s\n", tmp);
+
     return NULL;
 }
 
@@ -1340,8 +1342,13 @@ Type* get_type(Node* node) {
     // DEREFの場合はとってきたtypeの指す先を返す(型のderef)
     // TODO: ココよく理解する
     if (t && node->kind == ND_DEREF) {
+        Type* tt = t;
         t = t->ptr_to;
         if (t == NULL) {
+            print_node(node);
+            print_type(t);
+            print_type(t);
+
             error0("invalid dereference");
         }
         return t;

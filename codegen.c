@@ -10,10 +10,10 @@ StringToken* strings;
 // di   = least 2bytes of rdi
 // edi  = least 4bytes of rdi
 // サイズ(byte)ごとのレジスタのset
-static char* argreg1[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
-static char* argreg2[] = {"di", "si", "dx", "cx", "r8w", "r9w"};
-static char* argreg4[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
-static char* argreg8[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+char* argreg1[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
+char* argreg2[] = {"di", "si", "dx", "cx", "r8w", "r9w"};
+char* argreg4[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
+char* argreg8[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 
 // 構文木からアセンブラを作るところまで一気に進める
 int if_sequence = 0;
@@ -293,11 +293,13 @@ void gen(Node* node) {
             printf("  push rdi\n");
             return;
         case ND_RETURN:
-            gen(node->lhs);
-            printf("  pop rax\n");       // 値をraxにset(ABI)
-            printf("  mov rsp, rbp\n");  // epilogueをreturn時にも忘れず処理
-            printf("  pop rbp\n");
-            printf("  ret\n");
+            if (node->lhs) {
+                gen(node->lhs);
+                printf("  pop rax\n");  // 値をraxにset(ABI)
+                printf("  mov rsp, rbp\n");  // epilogueをreturn時にも忘れず処理
+                printf("  pop rbp\n");
+                printf("  ret\n");
+            }
             return;
         case ND_BREAK:
             if (break_sequence == 0) {

@@ -38,6 +38,14 @@ typedef enum {
     TK_SWITCH,
     TK_CASE,
     TK_DEFAULT,
+    TK_TRUE,
+    TK_FALSE,
+    TK_NULL,
+    TK_SEEKSET,
+    TK_SEEKCUR,
+    TK_SEEKEND,
+    TK_ERRNO,
+    TK_STDERR,
 } TokenKind;
 
 struct Token {
@@ -239,6 +247,8 @@ bool define_typedef();
 Type* define_enum();
 Type* int_type();
 Node* ptr_conversion(Node* node, Node* right);
+Node* initializer(Type* type);
+
 // 構文木からアセンブラを作るところまで一気に進める
 void gen(Node* node);
 void gen_val(Node* node);
@@ -264,7 +274,8 @@ void print_type(Type* type);
 void print_node(Node* node);
 
 char* read_file(char* path);
-
+Token* read_char_literal(Token* cur, char* start);
+char get_escape_char(char c);
 // global variables
 extern Token* token;
 extern char* user_input;

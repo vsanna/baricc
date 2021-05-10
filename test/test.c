@@ -6,6 +6,7 @@ int g_array[5] = {0, 1, 2, 3, 4};
 char g_array2[5] = {5, 6, 7, 8, 12};
 char *g_msg1 = "foo";
 char g_msg2[4] = "bar";
+char *user_input;
 
 // TODO: array of string is not supported yet
 // char *g_strings[] = {"abc", "def"};
@@ -224,9 +225,12 @@ int inner_test_pointer02() {
     z = &y + 4;
     assert(3, *z);
 }
+int inner_test_pointer03() { char *p = user_input; }
+
 int test_pointer() {
     inner_test_pointer01();
     inner_test_pointer02();
+    inner_test_pointer03();
 }
 
 int test_func_def_func1(int a, int b) { return a + b; }
@@ -717,6 +721,20 @@ void test_void() {
     assert(1, 1);
 }
 
+void test_bool() {
+    bool a = true;
+    assert(1, a);
+    bool b = false;
+    assert(0, b);
+    assert(true, (true || false));
+}
+
+void test_null() {
+    int a = NULL;
+    int *b = NULL;
+    bool c = NULL;
+}
+
 void test_nest_types() {
     Nest nestX;
     Nest *nestY;
@@ -743,10 +761,10 @@ void test_nest_types() {
     assert(321, n1.next->b);
 }
 
-// void test_char_literal() {
-//     assert(97, 'a');
-//     assert(10, '\n');
-// }
+void test_char_literal() {
+    assert(97, 'a');
+    assert(10, '\n');
+}
 
 // void test_hack() {
 //     // 変数の重複定義OK
@@ -792,8 +810,6 @@ void test_nest_types() {
 //     assert(40, f[1][0][1].a);
 // }
 
-// int func() { return 1; }
-
 int main() {
     test_calc();
     test_compare();
@@ -807,18 +823,23 @@ int main() {
     test_func();
     test_pointer();
     test_func_def();
+
+    // ok
     test_func_def_recursive();
     test_pointer_calc();
     test_sizeof();
     test_array();
-    test_array_access();
     test_global_variable();
+    test_struct();
+
+    // ng
+    test_array_access();
     test_char();
     test_string();
     test_gloval_variable_init();
     test_local_variable_init();
-    test_struct();
     test_typedef();
+
     test_enum();
     test_break();
     test_continue();
@@ -831,7 +852,8 @@ int main() {
     test_switch();
     test_void();
     test_nest_types();
-    // test_char_literal();
+    test_char_literal();
+    test_bool();
 
     // test_hack();
 

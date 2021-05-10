@@ -51,7 +51,7 @@ void expect(char *op) {
 // それ以外の場合にはエラー
 int expect_number() {
     if (token->kind != TK_NUM) {
-        int debug;
+        print_token(token);
         error_at0(token->str, "数ではありません\n");
     }
     int val = token->val;
@@ -98,13 +98,20 @@ typedef struct ReservedWord {
 } ReservedWord;
 
 ReservedWord reserved_words[] = {
-    {"return", TK_RETURN},     {"if", TK_IF},         {"else", TK_ELSE},
-    {"while", TK_WHILE},       {"for", TK_FOR},       {"int", TK_TYPE},
-    {"void", TK_TYPE},         {"char", TK_TYPE},     {"bool", TK_TYPE},
-    {"size_t", TK_TYPE},       {"sizeof", TK_SIZEOF}, {"struct", TK_STRUCT},
-    {"typedef", TK_TYPEDEF},   {"enum", TK_ENUM},     {"break", TK_BREAK},
-    {"continue", TK_CONTINUE}, {"switch", TK_SWITCH}, {"case", TK_CASE},
-    {"default", TK_DEFAULT},   {"", TK_EOF},
+    {"return", TK_RETURN},    {"if", TK_IF},
+    {"else", TK_ELSE},        {"while", TK_WHILE},
+    {"for", TK_FOR},          {"int", TK_TYPE},
+    {"void", TK_TYPE},        {"char", TK_TYPE},
+    {"bool", TK_TYPE},        {"size_t", TK_TYPE},
+    {"sizeof", TK_SIZEOF},    {"struct", TK_STRUCT},
+    {"typedef", TK_TYPEDEF},  {"enum", TK_ENUM},
+    {"break", TK_BREAK},      {"continue", TK_CONTINUE},
+    {"switch", TK_SWITCH},    {"case", TK_CASE},
+    {"false", TK_FALSE},      {"true", TK_TRUE},
+    {"NULL", TK_NULL},        {"SEEK_END", TK_SEEKEND},
+    {"SEEK_SET", TK_SEEKSET}, {"SEEK_CUR", TK_SEEKCUR},
+    {"default", TK_DEFAULT},  {"errno", TK_ERRNO},
+    {"stderr", TK_STDERR},    {"", TK_EOF},
 };
 
 // 入力文字列pをトークない頭してそれを返す
@@ -119,7 +126,7 @@ Token *tokenize() {
     Token *cur = &head;
 
     while (*p) {
-        print_token(cur);
+        // print_token(cur);
 
         // 空白
         if (isspace(*p)) {
@@ -199,7 +206,35 @@ Token *tokenize() {
             continue;
         }
 
-        // alphabet+いくつかの記号からなる文字列のまとまりは変数名
+        // char literal
+        if (*p == '\'') {
+            cur = read_char_literal(cur, p);
+            p += cur->len;
+            continue;
+        }
+
+        // string literal
+        if (*p == '"') {
+            p++;
+            char *c = p;
+            while (true) {
+                if (startswith(c, "\\")) {
+                    c += 2;
+                    continue;
+                }
+                if (*c == '"') {
+                    break;
+                }
+                c++;
+            }
+            int len = c - p;
+            cur = new_token(TK_STRING, cur, p, len);
+            p = c;
+            p += 1;
+            continue;
+        }
+
+        // a token which is composed of alphabets + some kinds of symbols are ident(variable name, tag(type) name)
         if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z')) {
             char *start = p;
             while (is_alnum(*p)) {
@@ -209,6 +244,7 @@ Token *tokenize() {
             continue;
         }
 
+        // int literal
         // TODO:
         // 今の箇所からどれだけの長さがdigitなのか、についてどう判断するのか
         if (isdigit(*p)) {
@@ -220,23 +256,67 @@ Token *tokenize() {
             continue;
         }
 
-        if ('"' == *p) {
-            p++;
-            char *c = p;
-            while ('"' != *c) {
-                c++;
-            }
-            int len = c - p;
-            cur = new_token(TK_STRING, cur, p, len);
-            p = c;
-            p += 1;
-            continue;
-        }
-
         error_at0(token->str, "トークナイズできません");
     }
 
     // print_token(cur);
     new_token(TK_EOF, cur, p, 0);
     return head.next;
+}
+
+// TODO: read here in detail
+//   'a'
+//   ^start here
+Token *read_char_literal(Token *cur, char *start) {
+    char *p = start + 1;
+    if (*p == '\0') {
+        error_at0(start, "unclosed char literal");
+    }
+
+    char c;
+    if (*p == '\\') {
+        // when escaping char literal
+        p++;
+        c = get_escape_char(*p);
+        p++;
+    } else {
+        c = *p;
+        p++;
+    }
+
+    // when ptr reaches here, it must be the closing single quote.
+    if (*p != '\'') {
+        error_at0(start, "char literal must be one length");
+    }
+    p++;
+
+    Token *tok = new_token(TK_NUM, cur, start, p - start);
+    tok->val = c;
+
+    return tok;
+}
+
+char get_escape_char(char c) {
+    switch (c) {
+        case 'a':
+            return '\a';
+        case 'b':
+            return '\b';
+        case 't':
+            return '\t';
+        case 'n':
+            return '\n';
+        case 'v':
+            return '\v';
+        case 'f':
+            return '\f';
+        case 'r':
+            return '\r';
+        case 'e':
+            return '\e';
+        case '0':
+            return '\0';
+        default:
+            return c;
+    }
 }

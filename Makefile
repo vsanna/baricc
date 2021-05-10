@@ -10,9 +10,10 @@ $(OBJS): 9cc.h
 test: 9cc
 	./test.sh
 
+self_compile:
+
 clean:
 	rm -f 9cc *.o *~ tmp*
 
-.PHONY: test clean
-
+.PHONY: test clean self_compile
 

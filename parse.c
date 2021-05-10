@@ -53,14 +53,15 @@ extern Node* code[1000];
 //             | define_variable ";"
 //             | "struct" define_struct ";"
 //             | "enum" define_enum ";"
+//             | "typedef" define_typedef
 //             )*
-// programをまずは関数の束とする
 void program() {
     int i = 0;
     while (!at_eof()) {
         Token* tk = token;
         if (consume_kind(TK_TYPEDEF)) {
             define_typedef();
+            expect(";");
             continue;
         }
 
@@ -98,20 +99,19 @@ void program() {
     code[i] = NULL;
 }
 
-// typedef struct Hoge {int a;} Gegi;
-// typedef struct Hoge Geho;
-// typedef int INT;
-// typedef char* String;
-// define_typedef ::= "typedef" type_decl alias ";"
+// ex:
+//   typedef struct Hoge {int a;} Gegi;
+//   typedef struct Hoge Geho;
+//   typedef int INT;
+//   typedef char* String;
+// define_typedef ::= "typedef" type_decl alias
+// TODO: this doesn't have to return bool.
 bool define_typedef() {
     // TODO: do consume_kind(TK_TYPEDEF) here
     Define* def = read_define_head();
     read_define_head(def);
 
-    // TODO: should not expect ";" here.
-    expect(";");
-
-    // type(struct)をident(alias)で登録
+    // register this type(struct) as its name is this identident
     push_tag(def->ident, def->type, false);
     return true;
 }
@@ -1475,11 +1475,11 @@ void read_define_suffix(Define* def) {
     def->type = type;
 }
 
-// TODO: ココを理解
+// TODO: learn here
 int align_to(int n, int align) { return (n + align - 1) & ~(align - 1); }
 
 // in general, when calling push_tag, the type should be complete
-// global変数のtagsに追加/上書きする
+// push_tag registers or update a tag in tags(global variable).
 void push_tag(Token* tok, Type* type, bool is_complete) {
     char* name = calloc(100, sizeof(char));
     memcpy(name, tok->str, tok->len);
@@ -1492,7 +1492,6 @@ void push_tag(Token* tok, Type* type, bool is_complete) {
     tag->type->array_size = type->array_size;
     tag->type->members = type->members;
     // NOTE: typedef struct Hoge Hoge; doesn't make the struct definition complete.
-    // TODO: typedef check if struct Hoge {int a;} Hoge; works
     if (tag->type->incomplete && is_complete) {
         tag->type->incomplete = false;
     }
@@ -1544,7 +1543,9 @@ Tag* find_or_register_tag(Token* tok) {
     return tag;
 }
 
-// 変数名を受け取ってそれがenumに登録されていれば(ex. enum Hoge {AAA, BBB} のAAA, BBB)
+// find_enum_var returns enum as int if a enum whose name is corresponding to the given token.
+// if it cannot find the enum name, it returns NULL.
+// enum name here means `AAA` of `enum Enum {AAA, BBB}`
 Node* find_enum_var(Token* tok) {
     char* name = calloc(100, sizeof(char));
     ;

@@ -19,8 +19,8 @@ struct Hoge {
 };
 typedef struct Hoge StructHoge;
 
-// String strtest = "cccc";
-// typedef struct Hoge StructHoge;
+String strtest = "cccc";
+typedef struct Hoge StructHoge;
 
 typedef struct Nest Nest;
 struct Nest {
@@ -28,14 +28,21 @@ struct Nest {
     int a;
 };
 
+// `struct Nest2` and `Nest2` can be considered as almost same
+typedef struct Nest2 Nest2;
+struct Nest2 {
+    Nest2 *next;
+    int b;
+};
+
 enum HogeEnum { AAA = 10, BBB, CCC };
 typedef enum Kind { K_A, K_B } Kind;
 Kind k = K_A;
 
-// enum LastComma {
-//     AAA,
-//     BBB,  // it's allowed to put camma at the end of last item
-// };
+enum LastComma {
+    AAA,
+    BBB,  // it's allowed to put camma at the end of last item
+};
 
 // // size_t, boolはintのalias
 // size_t size_t_v = 10;
@@ -722,6 +729,14 @@ void test_nest_types() {
     nestW.a = 30;
     nestZ.next = &nestW;
     assert(30, nestY->next->next->a);
+
+    Nest2 n1;
+    n1.b = 123;
+    assert(123, n1.b);
+    Nest2 n2;
+    n2.b = 321;
+    n1.next = &n2;
+    assert(321, n1.next->b);
 }
 
 // void test_char_literal() {

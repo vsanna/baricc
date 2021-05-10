@@ -98,15 +98,13 @@ typedef struct ReservedWord {
 } ReservedWord;
 
 ReservedWord reserved_words[] = {
-    {"return", TK_RETURN},   {"if", TK_IF},
-    {"else", TK_ELSE},       {"while", TK_WHILE},
-    {"for", TK_FOR},         {"int", TK_TYPE},
-    {"void", TK_TYPE},       {"char", TK_TYPE},
-    {"sizeof", TK_SIZEOF},   {"struct", TK_STRUCT},
-    {"typedef", TK_TYPEDEF}, {"enum", TK_ENUM},
-    {"break", TK_BREAK},     {"continue", TK_CONTINUE},
-    {"switch", TK_SWITCH},   {"case", TK_CASE},
-    {"default", TK_DEFAULT}, {"", TK_EOF},
+    {"return", TK_RETURN},     {"if", TK_IF},         {"else", TK_ELSE},
+    {"while", TK_WHILE},       {"for", TK_FOR},       {"int", TK_TYPE},
+    {"void", TK_TYPE},         {"char", TK_TYPE},     {"bool", TK_TYPE},
+    {"size_t", TK_TYPE},       {"sizeof", TK_SIZEOF}, {"struct", TK_STRUCT},
+    {"typedef", TK_TYPEDEF},   {"enum", TK_ENUM},     {"break", TK_BREAK},
+    {"continue", TK_CONTINUE}, {"switch", TK_SWITCH}, {"case", TK_CASE},
+    {"default", TK_DEFAULT},   {"", TK_EOF},
 };
 
 // 入力文字列pをトークない頭してそれを返す
@@ -121,7 +119,7 @@ Token *tokenize() {
     Token *cur = &head;
 
     while (*p) {
-        // print_token(cur);
+        print_token(cur);
 
         // 空白
         if (isspace(*p)) {
@@ -131,6 +129,24 @@ Token *tokenize() {
 
         // 行コメント
         if (startswith(p, "//")) {
+            while (!startswith(p, "\n")) {
+                p++;
+            }
+            continue;
+        }
+
+        // skip #include
+        // TODO: skip all macro
+        if (startswith(p, "#include")) {
+            while (!startswith(p, "\n")) {
+                p++;
+            }
+            continue;
+        }
+
+        // skip extern
+        // TODO: skip all macro
+        if (startswith(p, "extern")) {
             while (!startswith(p, "\n")) {
                 p++;
             }

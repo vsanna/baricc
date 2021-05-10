@@ -36,7 +36,10 @@ struct Nest2 {
 };
 
 enum HogeEnum { AAA = 10, BBB, CCC };
-typedef enum Kind { K_A, K_B } Kind;
+typedef enum Kind {
+    K_A,
+    K_B,
+} Kind;
 Kind k = K_A;
 
 enum LastComma {
@@ -44,12 +47,13 @@ enum LastComma {
     BBB,  // it's allowed to put camma at the end of last item
 };
 
-// // size_t, boolはintのalias
-// size_t size_t_v = 10;
-// bool bool_v = 1;
+// // size_t, bool are alias of int.
+size_t size_t_v = 10;
+bool bool_v = 1;
 
 // just ignore prototype decl.
-// extern int hoge;
+extern int hoge;
+int assert(int expected, int actual);
 
 int assert(int expected, int actual) {
     if (expected == actual) {

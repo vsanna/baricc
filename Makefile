@@ -10,10 +10,12 @@ $(OBJS): 9cc.h
 test: 9cc
 	./test.sh
 
-self_compile:
+self:
+	./9cc 9cc_to_check_selfcompile.h
+	./9cc 9cc.h tokenize.c
 
 clean:
 	rm -f 9cc *.o *~ tmp*
 
-.PHONY: test clean self_compile
+.PHONY: test clean self
 

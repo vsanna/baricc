@@ -240,12 +240,18 @@ void gen(Node* node) {
             */
             // そのアドレスをraxにいれ
             printf("  pop rax\n");
-            if (type && type->ty == CHAR) {
-                // TODO: what's this
-                printf("  movsx rax, BYTE PTR [rax]\n");
-            } else if (type && type->ty == INT) {
-                // TODO: what's this
-                printf("  movsxd rax, DWORD PTR [rax]\n");
+            if (type) {
+                switch (type->ty) {
+                    case CHAR:
+                        printf("  movsx rax, BYTE PTR [rax]\n");
+                        break;
+                    case INT:
+                        printf("  movsxd rax, DWORD PTR [rax]\n");
+                        break;
+                    default:
+                        printf("  mov rax, [rax]\n");
+                        break;
+                }
             } else {
                 printf("  mov rax, [rax]\n");
             }

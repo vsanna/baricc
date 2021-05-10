@@ -71,25 +71,32 @@ void program() {
             continue;
         }
 
-        // TODO: if(check_kind(TK_STRUCT)) にしたい
+        // TODO: if(check_kind(TK_STRUCT)) would be better. will align with code above
 
+        // top level statements which start with type + ident, like "int* hoge"
+        // three types of such statements.
+        // 1. function def: int main() {}
+        // 2. struct def: struct Hoge {} ... this should be placed before this section. if (check_kind(TK_STRUCT)) is better.
+        // 3. global var def: int hoge = 1;
         Define* def = read_define_head();
         if (def == NULL) {
             print_token(token);
             error0("def is NULL");
         }
         if (consume("(")) {
-            // 関数定義
-            code[i] = func_def(def);
+            Node* func_node = func_def(def);
+            if (func_node) {
+                code[i] = func_node;
+            } else {
+                continue;
+            }
         } else if (def->type->ty == STRUCT) {
-            // TODO: check_kindは消せるかも
             define_struct();
             expect(";");
             continue;
         } else {
-            // global変数の定義
             Node* gvar = define_variable(def, globals);
-            // TODO: ここでkind付け替えは良くない。後で直す
+            // TODO: refactor: should change kind in other place.
             gvar->kind = ND_GVAR_DEF;
             code[i] = gvar;
             expect(";");
@@ -279,16 +286,20 @@ Type* define_struct() {
 // block.
 // type-annotation ident までは読み込み済み
 Node* func_def(Define* def) {
-    // TODO: 本当? 呼び出しごとでは?
+    // one LVar linked list per one function.
     cur_scope_depth++;
     Node* node;
 
-    // 関数定義
+    // ND_FUNC_DEF node:
+    // node->funcname: string. func name.
+    // node->args: array of ND_LVAR node.
+    // node->lhs: function body.
     node = new_node(ND_FUNC_DEF);
+
+    // function name
     node->funcname = calloc(100, sizeof(char));
     memcpy(node->funcname, def->ident->str, def->ident->len);
     node->args = calloc(10, sizeof(char*));
-    node->block = calloc(100, sizeof(Node));
 
     // function args
     for (int i = 0; !consume(")"); i++) {
@@ -305,6 +316,14 @@ Node* func_def(Define* def) {
 
         Node* variable_node = define_variable(arg_def, locals);
         node->args[i] = variable_node;
+    }
+
+    // NOTE: int hoge(); is prototype decl. just skip this kind of statement.
+    if (consume(";")) {
+        int debug;
+        locals[cur_scope_depth] = NULL;
+        cur_scope_depth--;
+        return NULL;
     }
 
     // function body
@@ -775,7 +794,6 @@ Node* unary() {
                 has_brace = true;
             }
             Define* def = read_define_head();
-            // read_define_suffix(def);
             Node* size_of_type = new_num(get_type_size(def->type));
 
             if (has_brace) consume(")");
@@ -906,6 +924,7 @@ Node* primary() {
 //                                    ^start        ^end
 Node* define_variable(Define* def, LVar** varlist) {
     if (def == NULL) {
+        print_token(token);
         error0("invalid definition of function or variable");
     }
 
@@ -1415,7 +1434,8 @@ Define* read_define_head() {
         int isChar = memcmp("char", typeToken->str, typeToken->len) == 0;
 
         // NOTE: handle void as an alias of int in this compiler.
-        type->ty = isChar ? CHAR : INT;
+        type->ty = INT;  // default
+        if (isChar) type->ty = CHAR;
     }
     while (consume("*")) {
         Type* t = calloc(1, sizeof(Type));
@@ -1448,6 +1468,7 @@ Define* read_define_head() {
 // Defineのtypeに配列情報を付け加える. つまり型定義のsuffix部分をみる
 void read_define_suffix(Define* def) {
     if (def == NULL) {
+        print_token(token);
         error0("invalid definition of function or variable");
     }
 

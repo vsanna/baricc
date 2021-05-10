@@ -39,6 +39,14 @@ $ make test
 $ bash -x ./test.sh
 ```
 
+## Self Compile
+- [ ] 9cc.h
+- [ ] tokenize.c
+- [ ] parse.c
+- [ ] codegen.c
+- [ ] util.c
+
+
 ## supported feature
 - +, -, *, /
 - ==, !=, <, >, <=, >=

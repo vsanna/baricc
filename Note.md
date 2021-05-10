@@ -69,5 +69,6 @@ ref: https://qiita.com/arene-calix/items/a08363db88f21c81d351
     - なければ/usr/includeから探す
     - /usr/lib/x86_64-linux-gnu/libc.a が includeの実態を持っているらしい
     - ここでは#include(macro)はサポートしない. 単に無視する. linker
-
+- self compileのdebug
+    - 9cc_to_check_selfcompile.hを上からコメントアウト/インして読み込める場所を上から順次確かめる
 

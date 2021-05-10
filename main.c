@@ -7,9 +7,25 @@ Node* code[1000];
 int cur_scope_depth;
 
 int main(int argc, char** argv) {
-    if (argc != 2) {
-        fprintf(stderr, "invalid num of arguments");
-        return 1;
+    // make a LinkedList of token from all of the given files.
+    Token* t = NULL;
+    for (int i = 1; i < argc; i++) {
+        filename = argv[i];
+        user_input = read_file(filename);
+        t = tokenize();
+        if (!token) {
+            token = t;
+        } else {
+            Token* tt = token;
+            while (tt) {
+                if (!tt->next) {
+                    tt->next = t;
+                    break;
+                }
+                tt = tt->next;
+            }
+            tt->next = t;
+        }
     }
 
     // fileから

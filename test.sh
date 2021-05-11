@@ -18,7 +18,7 @@
 # }
 
 runTest() {
-    ./9cc "test/test.c" > tmp.s
+    ./9cc "test/test.c" | grep -v "^;" > tmp.s
 
     # link func.c(put non implemented c feature here)
     cd func

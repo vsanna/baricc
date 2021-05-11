@@ -1,9 +1,17 @@
-int main(int argc, char const *argv[]) {
-    int *x;
-    *x = 10;
-    return *x;
-}
+/*
+cc -o sandbox sandbox.c && ./sandbox; echo $?
+*/
 
-struct Hoge {
-    int a;
-}[] a = {{1}, {2}};
+#include <string.h>
+
+char* global_hoge = "hoge";
+int main(int argc, char const* argv[]) {
+    // char* word = global_hoge;
+    char* word = "hogehoge";
+    int* x;
+    int y;
+    y = 12;
+    x = &y;
+    // return *x;
+    return strlen(word);
+}

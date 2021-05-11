@@ -1,3 +1,4 @@
+
 This c_compiler is based on:
 - [低レイヤを知りたい人のためのCコンパイラ作成入門](https://www.sigbus.info/compilerbook)
 - [Cコンパイラ作ってみる](https://www.youtube.com/playlist?list=PLp_EUEO9JJP08ApAdaTYKHsonrLyKzdvp)
@@ -34,18 +35,22 @@ $ docker-compose exec app bash
 ## Run test
 ```bash
 $ make test
-
-# when you need verbose
-$ bash -x ./test.sh
 ```
 
 ## Self Compile
-- [ ] 9cc.h
-- [ ] tokenize.c
-- [ ] parse.c
-- [ ] codegen.c
-- [ ] util.c
+- [x] 9cc.h
+- [x] tokenize.c
+- [x] parse.c
+- [x] codegen.c
+- [x] util.c
 
+```bash
+make self > tmp.s
+# use cc as linker.
+cc -static -o 9cc_self tmp.s
+
+./9cc_self 9cc.h tokenize.c parse.c codegen.c util.c
+```
 
 ## supported feature
 - +, -, *, /
@@ -67,16 +72,14 @@ $ bash -x ./test.sh
 - witch
 - escape in string
 - #include
-    - this compiler doesn't support #include directly, but you can use #include.
-    - this compiler just ignores #include statements and rely on other linkers/copmilers.
+    - you can write #include, but this compiler just ignores all macro statement.
+- nested type
+- typedef struct A A;
+- ternary operator
 
-
-- [ ] nested type
-- [ ] typedef struct A A;
-- [ ] ternary operator
+## not supported features
 - [ ] static
 - [ ] ++, -- のptr対応
-
 - [ ] rest parameters
 - [ ] macro
 

@@ -1,7 +1,5 @@
 #include "9cc.h"
 
-// util
-char *filename;
 char *read_file(char *path) {
     FILE *fp = fopen(path, "r");
     if (!fp) {
@@ -69,7 +67,6 @@ void print_type(Type *type) {
     }
 
     if (type && (type->ty == ARRAY || type->ty == PTR)) {
-        print_type(type->ptr_to);
         return;
     }
 
@@ -152,7 +149,7 @@ void error_at1(char *loc, char *fmt, char *val) {
 
     // 見つかった行を、ファイル名と行番号と一緒に表示
     int indent = fprintf(stderr, "%s:%d: ", filename, line_num);
-    fprintf(stderr, "%.*s\n", (int)(end - line), line);
+    fprintf(stderr, "%.*s\n", (end - line), line);
 
     // エラー箇所を"^"で指し示して、エラーメッセージを表示
     int pos = loc - line + indent;
@@ -176,7 +173,7 @@ void error_at2(char *loc, char *fmt, char *val1, char *val2) {
 
     // 見つかった行を、ファイル名と行番号と一緒に表示
     int indent = fprintf(stderr, "%s:%d: ", filename, line_num);
-    fprintf(stderr, "%.*s\n", (int)(end - line), line);
+    fprintf(stderr, "%.*s\n", (end - line), line);
 
     // エラー箇所を"^"で指し示して、エラーメッセージを表示
     int pos = loc - line + indent;

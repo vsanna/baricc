@@ -1,7 +1,7 @@
 #include "9cc.h"
-LVar* locals[];
-int cur_scope_depth;
-StringToken* strings;
+// LVar* locals[100];
+// int cur_scope_depth;
+// StringToken* strings;
 
 // char* argregs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 // sets of alias based on byte size.
@@ -22,6 +22,9 @@ int continue_sequence = 0;
 // NOTE: BE CAREFUL when you change here.
 // It's not easy to find bugs in assembler.
 void gen(Node* node) {
+    if (node == NULL) {
+        error0("node must not be NULL");
+    }
     int id = if_sequence;
     int original_brk = 0;
     int original_cnt = 0;
@@ -122,7 +125,7 @@ void gen(Node* node) {
             printf("  push rax\n");
             return;
         case ND_STRING:
-            // TODO: push offset {symbol, label} を調べる
+            // TODO: learn push offset {symbol, label}
             printf("  push offset .LC%d\n", node->string->index);
             return;
         case ND_NUM:
@@ -167,7 +170,7 @@ void gen(Node* node) {
             // staticな場所からどれだけの場所を確保するか?
             printf("%s:\n", node->varname);
 
-            if (node->var->init == NULL) {
+            if (!(node->var->init)) {
                 printf("  .zero %d\n", node->varsize);
                 return;
             }
@@ -175,9 +178,15 @@ void gen(Node* node) {
             // g_msg2[4] = "bar"; のようにarrayでも{}の初期化式(block)がないことがある
             if (node->type->ty == ARRAY && node->var->init->block) {
                 for (int i = 0; node->var->init->block[i]; i++) {
-                    switch (node->type->ptr_to->ty) {
+                    // switch (node->type->ptr_to->ty) {
+                    if (node->var->init->block[i]->kind == ND_PADDING) {
+                        printf("  .zero 0x%x\n",
+                               node->var->init->block[i]->size);
+                        continue;
+                    }
+                    switch (node->var->init->block[i]->type->ty) {
                         case INT:
-                            // %x: 16進数表記
+                            // %x: Hexadecimal(16)
                             printf("  .long 0x%x\n",
                                    node->var->init->block[i]->val);
                             break;
@@ -185,9 +194,14 @@ void gen(Node* node) {
                             printf("  .byte 0x%x\n",
                                    node->var->init->block[i]->val);
                             break;
+                        case PTR:
+                            printf("  .quad .LC%d\n",
+                                   node->var->init->block[i]->string->index);
+                            break;
                         case ARRAY:
                             // TODO
-                        case PTR:
+                        case STRUCT:
+
                             // TODO
                         default:
                             break;
@@ -197,7 +211,9 @@ void gen(Node* node) {
             }
 
             // string単体の場合
+            // DEBUG: node->var->init
             if (node->var->init->kind == ND_STRING) {
+                // if (node->var->init && node->var->init->kind == ND_STRING) {
                 // NOTE: .LC%d ラベルにセットされている `.string {val}`を指すアドレスを作る
                 // char* (と char[]) がcではstring相当.
 
@@ -280,7 +296,7 @@ void gen(Node* node) {
 
             if (type && type->ty == CHAR) {
                 // NOTE: dil = rdiの下位8bitのalias
-                printf("mov [rax], dil\n");
+                printf("  mov [rax], dil\n");
             } else if (type && type->ty == INT) {
                 // NOTE: edi = rdiの下位32bitのalias
                 printf("  mov [rax], edi\n");
@@ -295,11 +311,14 @@ void gen(Node* node) {
         case ND_RETURN:
             if (node->lhs) {
                 gen(node->lhs);
-                printf("  pop rax\n");  // 値をraxにset(ABI)
-                printf("  mov rsp, rbp\n");  // epilogueをreturn時にも忘れず処理
-                printf("  pop rbp\n");
-                printf("  ret\n");
+            } else {
+                // when return value is not provided(e.g. `return;`), just return 0;
+                gen(new_num(0));
             }
+            printf("  pop rax\n");       // 値をraxにset(ABI)
+            printf("  mov rsp, rbp\n");  // epilogueをreturn時にも忘れず処理
+            printf("  pop rbp\n");
+            printf("  ret\n");
             return;
         case ND_BREAK:
             if (break_sequence == 0) {
@@ -431,7 +450,7 @@ void gen(Node* node) {
             printf("  cmp rax, 0\n");
             printf("  je .Lend%d\n", id);
 
-            // 実処理
+            // rhs->rhs: 実処理
             gen(node->rhs->rhs);
 
             // 後処理
@@ -598,6 +617,7 @@ void gen(Node* node) {
             */
             // 左辺値のアドレスをスタックの先頭にpushし、
             gen(node->lhs);
+
             // そのアドレスをraxにいれ
             printf("  pop rax\n");
             // そのアドレスにある値をraxにいれ、

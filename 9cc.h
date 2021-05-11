@@ -48,6 +48,10 @@ typedef enum {
     TK_STDERR,
 } TokenKind;
 
+/*
+Token is the smallest meaningful unit of characters in given program.
+It doesn't have semantics itself, but only when kind is TK_NUM, it can have value of the number
+*/
 struct Token {
     TokenKind kind;  // type of the token
     Token* next;     // next token. we use linkedlist instead of array.
@@ -56,84 +60,6 @@ struct Token {
     int len;  // length of the token. with len and str, we can get the token label.
 };
 
-/*
-Member: definition of members of a struct.
-*/
-struct Member {
-    Member* next;  // next member definition. we use linkedlist instaed of array
-    Type* ty;      // Type of the member
-    char* name;    // the member's name
-    int offset;  // offset of the member from the starting point of base variable.
-                 // actually, offset = sum of sizes of previous members
-};
-
-// 型名へのalias. Structのtagも typedef int INTのaliasも同様のもの
-// TODO: つまり typedef struct Hoge Hoge; は無意味?
-struct Tag {
-    Tag* next;
-    char* name;
-    Type* type;  //
-};
-
-// 型情報. ptr/arrayはその先の型情報も必要なので、それをptr_toとして持つ
-// TODO ptr_toをofとかにrenameしたい
-// TODO: char* hoge[] のメモリ配置.(stringの場合はdataにおかれるからそこのアドレスの配列)
-// NOTE: string => ARRAY of CHAR ≒ PTR of CHAR
-typedef enum { INT, CHAR, PTR, ARRAY, STRUCT } TypeKind;
-struct Type {
-    TypeKind ty;
-    struct Type*
-        ptr_to;  // used when ty == PTR, ARRAY. 指し示す先の変数の型を持つ
-    size_t array_size;
-    Member* members;
-    int size;
-    bool incomplete;
-};
-
-// local variables(LinkedList)
-struct LVar {
-    LVar* next;
-    char* name;
-    int len;  // length of name
-    int offset;  // 関数ごとの初期RSPまたはglobalの起点からのoffset.
-                 // 変数が増えるにつれて値は大きくなる.
-    // つまりstackの上に進む(stackの先頭からは遠ざかる)
-    Type* type;
-    enum { LOCAL, GLOBAL } kind;
-    Node* init;  // 初期化式
-};
-
-LVar* find_variable(Token* tok);
-Node* find_enum_var(Token* tok);
-// stringでありながらかつそのmap的なもの
-struct StringToken {
-    char* value;
-    int index;
-    StringToken* next;
-};
-
-// read_define用
-struct Define {
-    Token* ident;
-    Type* type;
-};
-
-Define* read_define();
-bool consume(char* op);
-Token* consume_kind(TokenKind kind);
-bool check(char* op);
-bool check_kind(TokenKind kind);
-void expect(char* op);
-int expect_number();
-void advance_token();
-bool at_eof();
-Token* new_token(TokenKind kind, Token* cur, char* str, int len);
-bool startswith(char* p, char* q);
-Token* tokenize();
-void register_lval(Token* tok, Type* type);
-
-// codegen
-// 抽象構文木のノードの種類
 typedef enum {
     ND_ADD,
     ND_SUB,
@@ -182,9 +108,15 @@ typedef enum {
     ND_TERNARY,  // ?:
     ND_SWITCH,
     ND_CASE,
-
+    ND_PADDING
 } NodeKind;
 
+/*
+Node is structure of program after parse.
+FIXME:
+Currently this Node struct has too many members which is for specific usecases.
+we should have more specialized Node (e.g. VarNode, FuncNode, etc..) to make code cleaner.
+*/
 struct Node {
     NodeKind kind;
     Node* lhs;
@@ -203,7 +135,91 @@ struct Node {
     Node* next_case;      // used when kind == ND_CASE
     Node* default_case;   // used when kind == ND_DEFAULT
     int case_label;       // used when kind == ND_SWITCH
+    int size;             // used when kind == ND_PADDING
 };
+
+// 型情報. ptr/arrayはその先の型情報も必要なので、それをptr_toとして持つ
+// FIXME ptr_toをofとかにrenameしたい
+// NOTE: string => ARRAY of CHAR ≒ PTR of CHAR
+typedef enum { INT, CHAR, PTR, ARRAY, STRUCT } TypeKind;
+struct Type {
+    TypeKind ty;
+    struct Type*
+        ptr_to;  // used when ty == PTR, ARRAY. 指し示す先の変数の型を持つ
+    size_t array_size;
+    Member* members;
+    int size;
+    bool incomplete;
+};
+
+// local variables(LinkedList)
+struct LVar {
+    LVar* next;
+    char* name;
+    int len;  // length of name
+    int offset;  // 関数ごとの初期RSPまたはglobalの起点からのoffset.
+                 // 変数が増えるにつれて値は大きくなる.
+    // つまりstackの上に進む(stackの先頭からは遠ざかる)
+    Type* type;
+    enum { LOCAL, GLOBAL } kind;
+    Node* init;  // 初期化式
+};
+
+LVar* find_variable(Token* tok);
+Node* find_enum_var(Token* tok);
+// stringでありながらかつそのmap的なもの
+struct StringToken {
+    char* value;
+    int index;
+    StringToken* next;
+};
+
+/*
+Tag is alias to type name. struct's tag is also tag.
+*/
+struct Tag {
+    Tag* next;
+    char* name;
+    Type* type;
+};
+
+/*
+Member is definition of members of a struct.
+ex:
+struct Example {
+    int a;  --> Member{next: b's member struct, ty: int, name: "a", offset: size of int(=4) }
+    char* b;  --> Member{next: NULL, ty: ptr of char, name: "b", offset: size of ptr of char(=8) }
+}
+*/
+struct Member {
+    Member* next;  // next member definition. we use linkedlist instaed of array
+    Type* ty;      // Type of the member
+    char* name;    // the member's name
+    int offset;  // offset of the member from the starting point of base variable.
+                 // actually, offset = sum of sizes of previous members
+};
+
+/*
+Define is container
+*/
+struct Define {
+    Token* ident;
+    Type* type;
+};
+
+Define* read_define();
+bool consume(char* op);
+Token* consume_kind(TokenKind kind);
+bool check(char* op);
+bool check_kind(TokenKind kind);
+void expect(char* op);
+int expect_number();
+void advance_token();
+bool at_eof();
+Token* new_token(TokenKind kind, Token* cur, char* str, int len);
+bool startswith(char* p, char* q);
+Token* tokenize();
+void register_lval(Token* tok, Type* type);
 
 Node* new_node(NodeKind kind);
 Node* new_binary(NodeKind kind, Node* lhs, Node* rhs);
@@ -248,6 +264,8 @@ Type* define_enum();
 Type* int_type();
 Node* ptr_conversion(Node* node, Node* right);
 Node* initializer(Type* type);
+void initializer_helper(Type* type, Node* init, int* i);
+Node* convert_predefined_keyword_to_num();
 
 // 構文木からアセンブラを作るところまで一気に進める
 void gen(Node* node);

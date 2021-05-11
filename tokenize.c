@@ -2,7 +2,7 @@
 
 Token *token;
 char *user_input;
-LVar *locals[100];
+char *filename;
 
 // 次のトークンが期待している記号のときにはトークンを一つ読み進めてtrueを返す
 // それ以外にはfalseを返す
@@ -98,20 +98,35 @@ typedef struct ReservedWord {
 } ReservedWord;
 
 ReservedWord reserved_words[] = {
-    {"return", TK_RETURN},    {"if", TK_IF},
-    {"else", TK_ELSE},        {"while", TK_WHILE},
-    {"for", TK_FOR},          {"int", TK_TYPE},
-    {"void", TK_TYPE},        {"char", TK_TYPE},
-    {"bool", TK_TYPE},        {"size_t", TK_TYPE},
-    {"sizeof", TK_SIZEOF},    {"struct", TK_STRUCT},
-    {"typedef", TK_TYPEDEF},  {"enum", TK_ENUM},
-    {"break", TK_BREAK},      {"continue", TK_CONTINUE},
-    {"switch", TK_SWITCH},    {"case", TK_CASE},
-    {"false", TK_FALSE},      {"true", TK_TRUE},
-    {"NULL", TK_NULL},        {"SEEK_END", TK_SEEKEND},
-    {"SEEK_SET", TK_SEEKSET}, {"SEEK_CUR", TK_SEEKCUR},
-    {"default", TK_DEFAULT},  {"errno", TK_ERRNO},
-    {"stderr", TK_STDERR},    {"", TK_EOF},
+    {"return", TK_RETURN},
+    {"if", TK_IF},
+    {"else", TK_ELSE},
+    {"while", TK_WHILE},
+    {"for", TK_FOR},
+    {"int", TK_TYPE},
+    {"void", TK_TYPE},
+    {"char", TK_TYPE},
+    {"bool", TK_TYPE},
+    {"size_t", TK_TYPE},
+    {"FILE", TK_TYPE},
+    {"sizeof", TK_SIZEOF},
+    {"struct", TK_STRUCT},
+    {"typedef", TK_TYPEDEF},
+    {"enum", TK_ENUM},
+    {"break", TK_BREAK},
+    {"continue", TK_CONTINUE},
+    {"switch", TK_SWITCH},
+    {"case", TK_CASE},
+    {"false", TK_FALSE},
+    {"true", TK_TRUE},
+    {"NULL", TK_NULL},
+    {"SEEK_END", TK_SEEKEND},
+    {"SEEK_SET", TK_SEEKSET},
+    {"SEEK_CUR", TK_SEEKCUR},
+    {"default", TK_DEFAULT},
+    {"errno", TK_ERRNO},
+    {"stderr", TK_STDERR},
+    {"", TK_EOF},
 };
 
 // 入力文字列pをトークない頭してそれを返す
@@ -176,7 +191,7 @@ Token *tokenize() {
         bool is_broken = false;
         for (int i = 0; reserved_words[i].kind != TK_EOF; i++) {
             char *word = reserved_words[i].word;
-            int len = strlen(word);
+            int len = strlen(word);  // DEBUG: これがND_BLOCKになってる?
             TokenKind kind = reserved_words[i].kind;
 
             if (startswith(p, word) && !is_alnum(p[len])) {

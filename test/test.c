@@ -9,8 +9,9 @@ char g_msg2[4] = "bar";
 char *user_input;
 
 // TODO: array of string is not supported yet
-// char *g_strings[] = {"abc", "def"};
+char *g_strings[] = {"abc", "def"};
 
+// typedef is available in global only.
 typedef int Int;
 typedef char *String;
 struct Hoge {
@@ -19,6 +20,14 @@ struct Hoge {
     int c;
 };
 typedef struct Hoge StructHoge;
+
+// TODO: fix
+StructHoge hoges[4] = {
+    {1, 'a', 100},
+    {2, 'b', 200},
+    {3, 'c', 300},
+    {4, 'd', 400},
+};
 
 String strtest = "cccc";
 typedef struct Hoge StructHoge;
@@ -310,6 +319,9 @@ int test_sizeof() {
     assert(4, sizeof Int);
     assert(8, sizeof String);
 
+    assert(8, sizeof Int *);
+    assert(8, sizeof(Int *));
+
     assert(4, sizeof(enum Yay{Y_A, Y_B}));
     assert(4, sizeof enum Yay2{Y2_A, Y2_B});
 }
@@ -358,6 +370,11 @@ int test_string() {
     char *a;
     a = "abcd";
     assert(97, a[0]);
+
+    char *b = g_strings[0];
+    assert(97, *(b + 0));
+    assert(98, *(b + 1));
+    assert(99, *(b + 2));
 }
 
 int test_gloval_variable_init() {
@@ -414,6 +431,11 @@ int test_local_variable_init() {
     assert(100, def[0]);
     assert(101, def[1]);
     assert(102, def[2]);
+
+    // TODO: currently, local variable cannot use string initializer
+    // this should be legal.
+    // char *word = "hoge";
+    // int len = strlen(word);
 }
 
 struct Hoge {
@@ -422,8 +444,13 @@ struct Hoge {
     int c;
 };
 
+// TODO: allow defining struct in function without variable decl
+struct StTest2 {
+    int a2;
+    char b2;
+    int c2;
+};
 int test_struct() {
-    // struct {} で一つの型
     struct {
         int aaa;
         int bbb;
@@ -444,8 +471,6 @@ int test_struct() {
     } ccc;
     int size = &ccc.c - &ccc.a;
     assert(8, size);
-    // TODO sizeof(struct型)が未対応
-    // TODO sizeof(型)も未対応
 
     struct Hoge x;
     x.a = 3;
@@ -466,6 +491,23 @@ int test_struct() {
     ccc2.a = 7;
     struct StTest *ptr = &ccc2;
     assert(7, ptr->a);
+
+    // TODO: fix initialization for struct
+    // struct StTest2 st = {333, 'b', 321};
+    // assert(123, st.a2);
+    // assert(98, st.b2);
+    // assert(321, st.c2);
+
+    // array of struct
+    assert(1, hoges[0].a);
+    assert(2, hoges[1].a);
+    assert(3, hoges[2].a);
+    assert(97, hoges[0].b);
+    assert(98, hoges[1].b);
+    assert(99, hoges[2].b);
+    assert(100, hoges[0].c);
+    assert(200, hoges[1].c);
+    assert(300, hoges[2].c);
 }
 
 int test_typedef() {
@@ -766,49 +808,48 @@ void test_char_literal() {
     assert(10, '\n');
 }
 
-// void test_hack() {
-//     // 変数の重複定義OK
-//     {
-//         int a = 10;
-//         assert(10, a);
-//     }
-//     {
-//         int a = 20;
-//         assert(20, a);
-//     }
+void test_hack() {
+    // 変数の重複定義OK
+    {
+        int a = 10;
+        assert(10, a);
+    }
+    {
+        int a = 20;
+        assert(20, a);
+    }
 
-//     // forの最初に変数定義
-//     for (int b = 0; b < 10; b++) {
-//     }
-//     assert(10, b);
+    // forの最初に変数定義
+    for (int b = 0; b < 10; b++) {
+    }
+    assert(10, b);
 
-//     // 配列アクセス ＋ "." access
-//     struct {
-//         int a;
-//     } c[10];
-//     c[0].a = 10;
-//     assert(10, c[0].a);
+    // 配列アクセス ＋ "." access
+    struct {
+        int a;
+    } c[10];
+    c[0].a = 10;
+    assert(10, c[0].a);
 
-//     // 配列＋arrow
-//     struct {
-//         int a;
-//     } * d[2];
-//     struct {
-//         int a;
-//     } e;
-//     e.a = 20;
-//     d[0] = &e;
-//     assert(20, d[0]->a);
+    // 配列＋arrow
+    struct {
+        int a;
+    } * d[2];
+    struct {
+        int a;
+    } e;
+    e.a = 20;
+    d[0] = &e;
+    assert(20, d[0]->a);
 
-//     // FIXME 多重配列＋.
-//     struct {
-//         int a;
-//     } f[2][2][2];
-//     f[0][1][1].a = 30;
-//     f[1][0][1].a = 40;
-//     assert(30, f[0][1][1].a);
-//     assert(40, f[1][0][1].a);
-// }
+    struct {
+        int a;
+    } f[2][2][2];
+    f[0][1][1].a = 30;
+    f[1][0][1].a = 40;
+    assert(30, f[0][1][1].a);
+    assert(40, f[1][0][1].a);
+}
 
 int main() {
     test_calc();
@@ -831,8 +872,6 @@ int main() {
     test_array();
     test_global_variable();
     test_struct();
-
-    // ng
     test_array_access();
     test_char();
     test_string();
@@ -855,7 +894,7 @@ int main() {
     test_char_literal();
     test_bool();
 
-    // test_hack();
+    test_hack();
 
     printf("OK\n");
     return 0;

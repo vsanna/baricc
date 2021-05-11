@@ -1,16 +1,12 @@
 #include "9cc.h"
 
-// 9cc.hでexternしたものをここで定義する
-Token* token;
-char* user_input;
-Node* code[1000];
-int cur_scope_depth;
-
 int main(int argc, char** argv) {
     // make a LinkedList of token from all of the given files.
     Token* t = NULL;
+    printf("; %d starting main\n", argc);
     for (int i = 1; i < argc; i++) {
         filename = argv[i];
+        printf("; i = %d, filename=%s\n", i, filename);
         user_input = read_file(filename);
         t = tokenize();
         if (!token) {
@@ -28,6 +24,8 @@ int main(int argc, char** argv) {
         }
     }
 
+    printf("; %d tokenize is done\n", argc);
+
     // fileから
     // filename = argv[1];
     // user_input = read_file(filename);
@@ -37,6 +35,8 @@ int main(int argc, char** argv) {
     // token = tokenize();
     cur_scope_depth = 0;
     program();
+
+    printf("; %d parse is done\n", argc);
 
     // アセンブリの前半を出力
     printf(".intel_syntax noprefix\n");
@@ -53,6 +53,9 @@ int main(int argc, char** argv) {
         }
     }
 
+    printf("; %d printing global variables without initializer is done\n",
+           argc);
+
     // TODO: .dataを調べる
     // .data
     // 初期化式のあるグローバル変数
@@ -61,6 +64,8 @@ int main(int argc, char** argv) {
         printf(".LC%d:\n", str->index);
         printf("  .string \"%s\"\n", str->value);
     }
+    printf("; %d printing global string variables with initializer is done\n",
+           argc);
     for (int i = 0; code[i]; i++) {
         if (code[i]->kind == ND_GVAR_DEF) {
             if (code[i]->var->init != NULL) {
@@ -68,6 +73,9 @@ int main(int argc, char** argv) {
             }
         }
     }
+    printf(
+        "; %d printing global non string variables with initializer is done\n",
+        argc);
 
     // TODO: what's this
     // .text
@@ -81,6 +89,7 @@ int main(int argc, char** argv) {
             gen(code[i]);
         }
     }
+    printf("; %d printing functions is done\n", argc);
 
     return 0;
 }

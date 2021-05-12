@@ -91,6 +91,7 @@ int test_calc() {
     assert(10, -10 + 20);
     assert(10, -(-10));
     assert(10, -(-(+10)));
+    assert(5, 1 + 2 * 3 - 4 / 2);
 }
 
 int test_compare() {
@@ -112,6 +113,13 @@ int test_compare() {
     assert(1, 1 >= 0);
     assert(1, 1 >= 1);
     assert(0, 1 >= 2);
+
+    assert(true, (0 + 2 > 1) && (10 > 1 + 1) && (-1 > 10 - 13));
+    assert(true, (10 / 5) == ((100 - 50) / 25));
+    assert(true, (0 + 2) == (10 / 5));
+    assert(true, (0 + 2 > 1) && (10 > 1 + 1) && (-1 > 10 - 13));
+    assert(true, (0 + 2 > 1) && (10 > 1 + 1) && (-1 > 10 - 13));
+    assert(true, (0 + 2 > 1) && (10 > 1 + 1) && (-1 > 10 - 13));
 }
 
 int test_variable() {
@@ -531,20 +539,16 @@ int test_typedef() {
 }
 
 int test_enum() {
-    // 関数内定義では型の直後に変数必須. 他の関数から見えないようにする効果もある.
-    // typedefはglobalにしかできない
     enum HogeEnum2 { AAA = 10, BBB, CCC } hogee;
     enum HogeEnum2 hogee2;
     hogee = AAA;
-    assert(10, hogee);  // 先頭は最初の要素と同じ値
+    assert(10, hogee);
     assert(11, BBB);
     assert(12, CCC);
 
     hogee2 = BBB;
     assert(11, hogee2);
 
-    // NOTE: enumの値を単にglobal変数として扱っているので同じenum名を使ってはだめ
-    // NOTE: enumは1スタート
     // enum HogeEnum3 { AAA, BBB } hogee3;
     enum HogeEnum3 { A, B } hogee3;
     hogee3 = A;
@@ -809,7 +813,7 @@ void test_char_literal() {
 }
 
 void test_hack() {
-    // 変数の重複定義OK
+    // it's allowed to define the same variable twice.
     {
         int a = 10;
         assert(10, a);
@@ -819,19 +823,16 @@ void test_hack() {
         assert(20, a);
     }
 
-    // forの最初に変数定義
     for (int b = 0; b < 10; b++) {
     }
-    assert(10, b);
+    assert(10, b);  // b is readable here since baricc doesn't have scope
 
-    // 配列アクセス ＋ "." access
     struct {
         int a;
     } c[10];
     c[0].a = 10;
     assert(10, c[0].a);
 
-    // 配列＋arrow
     struct {
         int a;
     } * d[2];
@@ -864,8 +865,6 @@ int main() {
     test_func();
     test_pointer();
     test_func_def();
-
-    // ok
     test_func_def_recursive();
     test_pointer_calc();
     test_sizeof();
@@ -878,7 +877,6 @@ int main() {
     test_gloval_variable_init();
     test_local_variable_init();
     test_typedef();
-
     test_enum();
     test_break();
     test_continue();

@@ -1,11 +1,12 @@
-#include "9cc.h"
+#include "baricc.h"
 
 Token *token;
 char *user_input;
 char *filename;
 
-// 次のトークンが期待している記号のときにはトークンを一つ読み進めてtrueを返す
-// それ以外にはfalseを返す
+// read current token, and check if it's expected content
+// if it's as expected, go on to the next token and return true
+// otherwise return false.
 bool consume(char *op) {
     if (!check(op)) {
         return false;
@@ -14,8 +15,9 @@ bool consume(char *op) {
     return true;
 }
 
-// current tokenが指定したTokenKindであれば、それを返しつつ、1つよみ進める
-// それ以外はNULL
+// read current token, and check if it's expected kind.
+// if it's as expected, go on to the next token and return the token
+// otherwise return NULL.
 Token *consume_kind(TokenKind kind) {
     if (!check_kind(kind)) {
         return NULL;
@@ -25,20 +27,22 @@ Token *consume_kind(TokenKind kind) {
     return tok;
 }
 
-// current tokenが指定した記号かどうかを判定. 進めはしない
+// read current token, and check if it's expected content
+// if it's as expected, just return true without moving to next one
 bool check(char *op) {
     return (token->kind == TK_RESERVED) && (strlen(op) == token->len) &&
            (memcmp(token->str, op, token->len) == 0);
 }
 
-// current tokenが指定したTokenKindかどうかを調べる. 進めはしない.
+// read current token, and check if it's expected kind
+// if it's as expected, just return true without moving to next one
 bool check_kind(TokenKind kind) { return token->kind == kind; }
 
-// 次のトークンが期待している記号のときにはトークンを一つ読み進める。
-// それ以外にはエラーを投げる
+// read current token, and check if it's expected content
+// if it's as expected, go on to the next token and return
+// otherwise throw error.
 void expect(char *op) {
-    if (token->kind != TK_RESERVED || strlen(op) != token->len ||
-        memcmp(token->str, op, token->len)) {
+    if (!check(op)) {
         char *tmp[100] = {0};
         memcpy(tmp, token->str, token->len);
         error_at2(token->str, "expected: '%c'\nactual: '%s'\n", *op, tmp);
@@ -47,8 +51,20 @@ void expect(char *op) {
     return;
 }
 
-// 次のトークンが数値の場合、トークンを一つ読み進めてその数値を返す
-// それ以外の場合にはエラー
+// read current token, and check if it's expected kind
+// if it's as expected, go on to the next token and return
+// otherwise throw error.
+Token *expect_kind(TokenKind kind) {
+    if (!check_kind(kind)) {
+        error_at2(token->str, "unexpected token: '%s'\nactual: '%s'\n",
+                  get_token_kind_name(kind), get_token_kind_name(token->kind));
+    }
+    Token *tok = token;
+    advance_token();
+    return tok;
+}
+
+// expect function dedicated for TK_NUM
 int expect_number() {
     if (token->kind != TK_NUM) {
         print_token(token);
@@ -70,16 +86,14 @@ void advance_token() {
 
 bool at_eof() { return token->kind == TK_EOF; }
 
-// 新しいトークンを作成してcurのnextにセット
-// TODO: "+ 12 - hoge" が渡ってきたとき、tok->str = str
-// で先頭の1文字だけ渡るのはなぜ
-//   ->
-//   わかった。その位置のアドレスを保持しているのみで、ちゃんとsplitしているわけではない...
+// build token object.
+// token's content is available by utilizing tok->str `and` tok->len.
 Token *new_token(TokenKind kind, Token *cur, char *str, int len) {
-    // callocは割り当てられたメモリをゼロクリアしてくれる
+    // calloc get memories as requested and clear them with zero(malloc doesn't
+    // do zero clearance)
     Token *tok = calloc(1, sizeof(Token));
     tok->kind = kind;
-    tok->str = str;  // charだけをsetしてる?
+    tok->str = str;
     tok->len = len;
     cur->next = tok;
     return tok;
@@ -129,9 +143,10 @@ ReservedWord reserved_words[] = {
     {"", TK_EOF},
 };
 
-// 入力文字列pをトークない頭してそれを返す
-// headはコードを簡単にするためのtrick.
-// ポインターでlinkedlistを作るときの定石らしい.
+/*
+tokenize does tokenize from given program(char*), which is called user_input
+note: using blank object as head of linkedlist is said to be one common way..
+*/
 Token *tokenize() {
     char *p = user_input;
     Token head;
@@ -143,39 +158,13 @@ Token *tokenize() {
     while (*p) {
         // print_token(cur);
 
-        // 空白
+        // skip blanks
         if (isspace(*p)) {
             p++;
             continue;
         }
 
-        // 行コメント
-        if (startswith(p, "//")) {
-            while (!startswith(p, "\n")) {
-                p++;
-            }
-            continue;
-        }
-
-        // skip #include
-        // TODO: skip all macro
-        if (startswith(p, "#include")) {
-            while (!startswith(p, "\n")) {
-                p++;
-            }
-            continue;
-        }
-
-        // skip extern
-        // TODO: skip all macro
-        if (startswith(p, "extern")) {
-            while (!startswith(p, "\n")) {
-                p++;
-            }
-            continue;
-        }
-
-        // ブロックコメント
+        // skip block comments
         if (startswith(p, "/*")) {
             char *q = strstr(p + 2, "*/");
             if (!q) {
@@ -185,23 +174,48 @@ Token *tokenize() {
             continue;
         }
 
-        // identの前に処理する
-        // returnがきてなおかつnの次がtokenを構成する文字列ではない
-        // p[6]: pの示すアドレス+6にある値
-        bool is_broken = false;
+        // skip line comments
+        if (startswith(p, "//")) {
+            while (!startswith(p, "\n")) {
+                p++;
+            }
+            continue;
+        }
+
+        // skip #include
+        // TODO: skip all preprocessors/macro
+        // TODO: imple preprocessor
+        if (startswith(p, "#include")) {
+            while (!startswith(p, "\n")) {
+                p++;
+            }
+            continue;
+        }
+
+        // skip extern
+        // TODO: impl extern
+        if (startswith(p, "extern")) {
+            while (!startswith(p, "\n")) {
+                p++;
+            }
+            continue;
+        }
+
+        // try to parse reserved words before ident
+        bool did_break = false;
         for (int i = 0; reserved_words[i].kind != TK_EOF; i++) {
             char *word = reserved_words[i].word;
-            int len = strlen(word);  // DEBUG: これがND_BLOCKになってる?
+            int len = strlen(word);
             TokenKind kind = reserved_words[i].kind;
 
             if (startswith(p, word) && !is_alnum(p[len])) {
                 cur = new_token(kind, cur, p, len);
                 p += len;
-                is_broken = true;
+                did_break = true;
                 break;
             }
         }
-        if (is_broken) {
+        if (did_break) {
             continue;
         }
 
@@ -249,7 +263,8 @@ Token *tokenize() {
             continue;
         }
 
-        // a token which is composed of alphabets + some kinds of symbols are ident(variable name, tag(type) name)
+        // a token which is composed of alphabets + some kinds of symbols are
+        // ident(variable name, tag(type) name)
         if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z')) {
             char *start = p;
             while (is_alnum(*p)) {
@@ -260,18 +275,16 @@ Token *tokenize() {
         }
 
         // int literal
-        // TODO:
-        // 今の箇所からどれだけの長さがdigitなのか、についてどう判断するのか
         if (isdigit(*p)) {
             cur = new_token(TK_NUM, cur, p, 0);
             char *q = p;
-            // 数字分だけ前に進む
+            // move as many as length of the digit
             cur->val = strtol(p, &p, 10);
             cur->len = p - q;
             continue;
         }
 
-        error_at0(token->str, "トークナイズできません");
+        error_at0("failed to tokenize. %s\n", token->str);
     }
 
     // print_token(cur);

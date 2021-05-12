@@ -1,24 +1,19 @@
-#include "9cc.h"
-// LVar* locals[100];
-// int cur_scope_depth;
-// StringToken* strings;
-
-// char* argregs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+#include "baricc.h"
 // sets of alias based on byte size.
 // ex.
 // dil  = least 1byte of rdi
 // di   = least 2bytes of rdi
 // edi  = least 4bytes of rdi
-// サイズ(byte)ごとのレジスタのset
 char* argreg1[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
 char* argreg2[] = {"di", "si", "dx", "cx", "r8w", "r9w"};
 char* argreg4[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
 char* argreg8[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 
-// 構文木からアセンブラを作るところまで一気に進める
+// when we use jmp with label, we must increment this value.
 int if_sequence = 0;
 int break_sequence = 0;
 int continue_sequence = 0;
+
 // NOTE: BE CAREFUL when you change here.
 // It's not easy to find bugs in assembler.
 void gen(Node* node) {
@@ -35,7 +30,8 @@ void gen(Node* node) {
     switch (node->kind) {
         case ND_LOGAND:
             if_sequence++;
-            // leftから評価して、一度でもfalseになったら即離脱
+            // evalulate from left item, and once false is found, it leaves here
+            // and jump to else clause
             gen(node->lhs);
             printf("  pop rax\n");
             printf("  cmp rax, 0\n");
@@ -44,7 +40,7 @@ void gen(Node* node) {
             printf("  pop rax\n");
             printf("  cmp rax, 0\n");
             printf("  je .Lfalse%d\n", id);
-            // cond == trueなので1をpush
+            // when it comes here, cond is true so push 1 as true
             printf("  push 1\n");
             printf("  jmp .Lend%d\n", id);
             printf(".Lfalse%d:\n", id);
@@ -53,7 +49,8 @@ void gen(Node* node) {
             return;
         case ND_LOGOR:
             if_sequence++;
-            // leftから評価して、一度でもtrueになったら即離脱
+            // evaluate from left item, and once true is found, it leaves here
+            // and jump to else caluse
             gen(node->lhs);
             printf("  pop rax\n");
             printf("  cmp rax, 0\n");
@@ -62,9 +59,9 @@ void gen(Node* node) {
             printf("  pop rax\n");
             printf("  cmp rax, 0\n");
             printf("  jne .Ltrue%d\n", id);
+            // when it comes here, cond is false so push 1 as true
             printf("  push 0\n");
             printf("  jmp .Lend%d\n", id);
-            // cond == falseなので0をpush
             printf(".Ltrue%d:\n", id);
             printf("  push 1\n");
             printf(".Lend%d:\n", id);
@@ -76,27 +73,28 @@ void gen(Node* node) {
             printf("  push rax\n");
             return;
         case ND_NOT:
-            // 出てきた値を0と比較しているだけ.
+            // just compare evaluated value with 0
             gen(node->lhs);
             printf("  pop rax\n");
             printf("  cmp rax, 0\n");
-            printf("  sete al\n");  // 比較した結果がalに入る
+            printf("  sete al\n");  // result is stored in al(=rax)
             printf("  movzb rax, al\n");
             printf("  push rax\n");
             return;
         case ND_PRE_INC:
-            // ++a
-            // a + 1
-            // push a
+            // evaluate `++a` as two operation
+            // 1. a + 1
+            // 2. push a
+            // ND_ASSIGN pushes its lhs variable's value at last, so it's fine
+            // just to gen ND_ASSIGN here.
             n = new_node(ND_ASSIGN);
             n->lhs = node->lhs;
             n->rhs = new_binary(ND_ADD, node->lhs, new_num(1));
             gen(n);
             return;
-        case ND_SUF_INC:
-            // a++
-            // a = a + 1 して
-            // stackのtopの値に1引いて調整前の値にするく
+        case ND_SUF_INC:  // a++
+            // do operation of ND_PRE_INC first
+            // after that, decrement the top value on stack
             gen(new_binary(ND_PRE_INC, node->lhs, NULL));
             printf("  push 1\n");
             printf("  pop rdi\n");
@@ -105,18 +103,12 @@ void gen(Node* node) {
             printf("  push rax\n");
             return;
         case ND_PRE_DEC:
-            // --a
-            // a - 1
-            // push a
             n = new_node(ND_ASSIGN);
             n->lhs = node->lhs;
             n->rhs = new_binary(ND_SUB, node->lhs, new_num(1));
             gen(n);
             return;
         case ND_SUF_DEC:
-            // a++
-            // a = a + 1 して
-            // stackのtopの値に1加えて調整前の値にする
             gen(new_binary(ND_PRE_DEC, node->lhs, NULL));
             printf("  push 1\n");
             printf("  pop rdi\n");
@@ -138,47 +130,54 @@ void gen(Node* node) {
                 int *c = &a;
                 char *d = b + 3;
 
-                // data領域にlong型(=8byte)で3という値をおいてaというラベルを付ける
+                register int value with type(size) and lable in .data space
+                ex: int a = 3; is translated as:
+
                 a:
-                .long 3
+                  .long 3
 
-                // data領域にbyte型(=1byte)で各値をおいてその先頭にbというラベルを付ける
+                register string value with type(size) and label in .data space
+                ex: char b[] = "foobar\0";
+
                 b:
-                .byte 0x66 // 'f'
-                .byte 0x6f // 'o'
-                .byte 0x6f // 'o'
-                .byte 0x62 // 'b'
-                .byte 0x61 // 'a'
-                .byte 0x72 // 'r'
-                .byte 0    // '\0'
+                  .byte 0x66 // 'f'
+                  .byte 0x6f // 'o'
+                  .byte 0x6f // 'o'
+                  .byte 0x62 // 'b'
+                  .byte 0x61 // 'a'
+                  .byte 0x72 // 'r'
+                  .byte 0    // '\0'
 
-                // data領域にquad型(=4byte)で値をおく.
-                // すでに定義済みのシンボルの値を使える.
+                register address value with type(size) and label
+                we can use labels which are defined beforehand
+                ex: int *c = &a;
                 c:
-                .quad a
+                  .quad a
+
+                we can do some calc in .data space
+                ref: https://mfumi.hatenadiary.org/entry/20121231/1356880556
                 d:
-                .quad b + 3
+                  .quad b + 3
 
-                // TODO .quad {symbol or val} の解釈
-                // TODO .quad {symbol or val}+1 の解釈
-                // TODO .string {symbol or val}+1 の解釈
-                // TODO .ascii {symbol or val}+1 の解釈
-                // TODO .zero {symbol or val}+1 の解釈
-
-                https://mfumi.hatenadiary.org/entry/20121231/1356880556
+                // TODO: learn what size are available in .data space
+                .quad
+                .byte
+                .string
+                .ascii
+                .zero
             */
-            // staticな場所からどれだけの場所を確保するか?
+
             printf("%s:\n", node->varname);
 
-            if (!(node->var->init)) {
+            if (node->var->init == NULL) {
                 printf("  .zero %d\n", node->varsize);
                 return;
             }
 
-            // g_msg2[4] = "bar"; のようにarrayでも{}の初期化式(block)がないことがある
+            // array's initializer doesn't always have block. ex: g_msg2[4] =
+            // "bar";
             if (node->type->ty == ARRAY && node->var->init->block) {
                 for (int i = 0; node->var->init->block[i]; i++) {
-                    // switch (node->type->ptr_to->ty) {
                     if (node->var->init->block[i]->kind == ND_PADDING) {
                         printf("  .zero 0x%x\n",
                                node->var->init->block[i]->size);
@@ -198,67 +197,61 @@ void gen(Node* node) {
                             printf("  .quad .LC%d\n",
                                    node->var->init->block[i]->string->index);
                             break;
-                        case ARRAY:
-                            // TODO
-                        case STRUCT:
-
-                            // TODO
                         default:
                             break;
                     }
                 }
                 return;
             }
+            // TODO: support global variable struct initializer
 
-            // string単体の場合
-            // DEBUG: node->var->init
+            // when string
             if (node->var->init->kind == ND_STRING) {
-                // if (node->var->init && node->var->init->kind == ND_STRING) {
-                // NOTE: .LC%d ラベルにセットされている `.string {val}`を指すアドレスを作る
-                // char* (と char[]) がcではstring相当.
+                // strings are registed with .LC%d labels in .data space
+                // we need to
 
-                // TODO: ここ理解する. node->typeはnodeがVARのときに入る.
+                // TODO: understand in more detail
                 if (node->type->ty == ARRAY) {
-                    // 1. char a[3] = "hoge" のケース
+                    // 1. char a[3] = "hoge"
                     printf("  .string \"%s\"\n",
                            node->var->init->string->value);
                 } else {
-                    // 2. char *a = "hoge" のケース
+                    // 2. char *a = "hoge". a is pointer.
                     printf("  .quad .LC%d\n", node->var->init->string->index);
                 }
                 return;
             }
 
-            // int 単体の場合
+            // when int
             printf("  .long 0x%x\n", node->var->init->val);
             return;
         case ND_MEMBER:
         case ND_GVAR:
         case ND_LVAR:
-            // 変数の評価とは、「値」をスタックにpushすること.
+            // evaulation of variables means pushing their "values" in stack.
 
-            // 左辺値のアドレスをスタックの先頭にpushし、
+            // 1. evaluate lhs variabel as lvalue == push its address in stack
             gen_val(node);
 
-            // TODO: わからぬ.
-            // arrayの場合はaddressを入れたままで終わってOK
-            // arrayはpointerのようにあつかうため.(DEREFと似たことをしている)
+            // TODO: understand in more details
             type = get_type(node);
             if (type && type->ty == ARRAY) {
                 return;
             }
 
             /*
-            DEREF処理する. = アドレスの指す値に差し替えてpushする
-            そのアドレスにある値をraxにいれる。
-            指定したアドレスからデフォルトでは8個分のアドレスにある値をとってきてしまうので、
-            必要な長さを指定する
+            DEREF operation is to push a value of specified address in stack.
+            So, first compiler pushes an address of variable, and replace the
+            value with its actual value
             */
-            // そのアドレスをraxにいれ
+            // 2. push the variable's address
             printf("  pop rax\n");
+
+            // 3. get a value of specified address
             if (type) {
                 switch (type->ty) {
                     case CHAR:
+                        // TODO: learn movsc, movsxd
                         printf("  movsx rax, BYTE PTR [rax]\n");
                         break;
                     case INT:
@@ -272,51 +265,51 @@ void gen(Node* node) {
                 printf("  mov rax, [rax]\n");
             }
 
-            // その値をスタックの先頭にpush
+            // 4. and push the value in stack
             printf("  push rax\n");
             return;
         case ND_ASSIGN:
             type = get_type(node);
-            // 左辺の左辺値のアドレスをstackにpush
+            // evaluate lhs as lvalue
             gen_val(node->lhs);
-            // 右辺を計算した値をstackにpush
+            // push evaluated value of lhs
             gen(node->rhs);
-            // rdiに計算結果をpopしてrdiにいれる
-            printf("  pop rdi\n");
-            // 左辺のアドレスをpopしてraxに入れる
-            printf("  pop rax\n");
+            printf("  pop rdi\n");  // rdi contains value
+            printf("  pop rax\n");  // rax contains variable's address
 
             /*
-            raxの示すアドレスに64bitのレジスタをmovすると、示すアドレスから数えて8個分の
-            アドレスに値が書き込まれることになる
-
-            8B未満のデータの配列を連続して書き込む場合はそれだと不要な書き込みが発生するので、
-            レジスタの下位Nbitだけを書き込むことをaliasを用いて指定する
+            calling mov with 64bit register will write the whole bit(=8bytes) of
+            the receiver register. when we wanna write on only part of the
+            receiver, we should use aliases of registers. ex. dil is an alias of
+            rdi and it just hold least 8 bits of rdi. `mov [rax], dil` will copy
+            only 8bits from rdi to [rax].
             */
 
             if (type && type->ty == CHAR) {
-                // NOTE: dil = rdiの下位8bitのalias
+                // NOTE: dil = least 8 bits(1B) of rdi
                 printf("  mov [rax], dil\n");
             } else if (type && type->ty == INT) {
-                // NOTE: edi = rdiの下位32bitのalias
+                // NOTE: edi = least 32bits (4B) of rdi
                 printf("  mov [rax], edi\n");
             } else {
                 printf("  mov [rax], rdi\n");
             }
 
-            // rdiの値 = 計算結果をstackの頂点に入れておく
-            // こうすることで a = b = 10 みたいな式がかける
+            // store rdi's value = evaluation result
             printf("  push rdi\n");
             return;
         case ND_RETURN:
             if (node->lhs) {
                 gen(node->lhs);
             } else {
-                // when return value is not provided(e.g. `return;`), just return 0;
+                // when return value is not provided(e.g. `return;`), just
+                // return 0;
                 gen(new_num(0));
             }
-            printf("  pop rax\n");       // 値をraxにset(ABI)
-            printf("  mov rsp, rbp\n");  // epilogueをreturn時にも忘れず処理
+            printf("  pop rax\n");  // set evaulated value on rax(this is ABI
+                                    // requirement)
+            printf(
+                "  mov rsp, rbp\n");  // don't forget to have epilogue on return
             printf("  pop rbp\n");
             printf("  ret\n");
             return;
@@ -340,8 +333,7 @@ void gen(Node* node) {
             // cond
             gen(node->lhs);
             printf("  pop rax\n");
-            // lhs(=cond)の結果が0(=false)だったらjump
-            // つまりjump先がalt
+            // if lhs(=cond)'s evaulated result is 0(=false), jump.
             printf("  cmp rax, 0\n");
             printf("  je .Lelse%d\n", id);
 
@@ -360,20 +352,23 @@ void gen(Node* node) {
 
             printf(".Lend%d:\n", id);
 
-            // TODO: 今の実装だとif文は最後に評価した値をstackに持ってる
-            // if式にするならこのままでもよい
+            // TODO: with current impl, `if` statement stores a value which is
+            // last evaluated value in cond or then or alt. To make it
+            // `statement`, we should change, but if it's ok for `if` to be
+            // expr, current style is fine..
             return;
         case ND_TERNARY:
             /*
-                # ifとの違い
-                - 評価結果をstackにpushするところがifとの違い
-                - elseが常にある
+                # vs if
+                - ternary explicitly pushes evaluated result on stack.
+                - ternary always has else clause
+
+            kind: ND_TERNARY
+            lhs:  cond
+            rhs:  stmt(then) or ND_ELSE(lhs=then, rhs=alt)
             */
 
             if_sequence++;
-            // lhs: cond
-            // rhs: stmt(main) or else(lhs=main, rhs=alt)
-
             // cond
             gen(node->lhs);
             printf("  pop rax\n");
@@ -396,20 +391,21 @@ void gen(Node* node) {
             original_cnt = continue_sequence;
             continue_sequence = id;
             /*
+            while({cond}) {body}
+
             [cond]
             je end
-            [main]
+            [body]
             .end:
             */
             printf(".Lbegin%d:\n", id);
-            printf(".Lcontinue%d:\n",
-                   id);  // TODO: LcontinueはLbeginとまとめられる?
-            // 条件
+            printf(".Lcontinue%d:\n", id);
+            // cond
             gen(node->lhs);
             printf("  pop rax\n");
             printf("  cmp rax, 0\n");
             printf("  je .Lend%d\n", id);
-            // 実処理
+            // body
             gen(node->rhs);
             printf("  jmp .Lbegin%d\n", id);
             printf(".Lend%d:\n", id);
@@ -423,38 +419,50 @@ void gen(Node* node) {
             original_cnt = continue_sequence;
             continue_sequence = id;
             /*
-            Aをコンパイルしたコード
+            for({A}; {B}; {C)) D
+
+            [A]
             .LbeginXXX:
-            Bをコンパイルしたコード
+            [B]
             pop rax
             cmp rax, 0
             je  .LendXXX
-            Dをコンパイルしたコード
-            Cをコンパイルしたコード
+            [D]
+            [C]
             jmp .LbeginXXX
             .LendXXX:
+
+            kind: ND_FOR
+            lhs:
+                lhs: A: init
+                rhs: B: cond
+            rhs:
+                lhs: C: post ops
+                rhs: D: body
             */
-            // 初期化
+
+            // A: init
             if (node->lhs->lhs != NULL) {
                 gen(node->lhs->lhs);
             }
             printf(".Lbegin%d:\n", id);
 
-            // 条件
+            // B: cond
             if (node->lhs->rhs != NULL) {
                 gen(node->lhs->rhs);
             } else {
-                printf("  push 1\n");  // 常にtrue
+                printf("  push 1\n");  // if cond is not given, it's always
+                                       // true. ex: for(;;) {} == while(true) {}
             }
             printf("  pop rax\n");
             printf("  cmp rax, 0\n");
             printf("  je .Lend%d\n", id);
 
-            // rhs->rhs: 実処理
+            // D: body
             gen(node->rhs->rhs);
 
-            // 後処理
-            // for内のcontinueは後処理から
+            // C: post ops
+            // continue stmt in for loop will jump right before post ops.
             printf(".Lcontinue%d:\n", id);
             if (node->rhs->lhs != NULL) {
                 gen(node->rhs->lhs);
@@ -471,26 +479,42 @@ void gen(Node* node) {
             }
             return;
         case ND_SWITCH:
+            /*
+            switch({expr}) {
+                case {label}: --> collected as ND_CASE and stored in ND_SWITCH's
+            next_case and default_case members {body};   --> collected in
+            ND_SWITCH's rhs
+            }
+
+            kind: ND_SWITCH
+            lhs: expr
+            rhs: all bodies in each case segments
+            */
             original_brk = break_sequence;
             break_sequence = id;
 
-            gen(node->lhs);  // switch(expr)
+            // expr
+            gen(node->lhs);
             printf("  pop rax\n");
 
+            // labels
             for (Node* n = node->next_case; n; n = n->next_case) {
-                // specify unique label id for each case so that cpu can jump to one of them directly.
+                // specify unique label id for each case so that cpu can jump to
+                // one of them directly.
                 n->case_label = ++if_sequence;
                 printf("  cmp rax, %d\n", n->val);
                 printf("  je .Lcase%d\n", n->case_label);
             }
-
             if (node->default_case) {
                 node->default_case->case_label = ++if_sequence;
                 printf("  jmp .Lcase%d\n", node->default_case->case_label);
             }
-
             // for the case where no lable matches the given cond.
             printf("  jmp .Lend%d\n", id);
+
+            // body
+            // in this body, we may have break statements which jump to Lend
+            // label right below.
             gen(node->rhs);
             printf(".Lend%d:\n", id);
 
@@ -500,16 +524,27 @@ void gen(Node* node) {
             printf(".Lcase%d:\n", node->case_label);
             return;
         case ND_FUNC_CALL:
-            if_sequence++;
             /*
-            call前に引数をABIの定義するレジスタに登録する
-            TODO: epilogueでpushするんじゃないのか?
-                -> epilogueは関数のラベルの直下で書くもの.
-                -> つまりココではない!
-            TODO: 一旦引数は6個までサポート
+            1. puts arguments in registers in manner defined by ABI
+                - In func def, we retrieve these registered values
+            2. adjust rsp so that it is multiple of 16 (this is ABI requirement)
+            3. call func
+            4. push rax after returning (returning value is put in rax. this is
+            ABI requirement)
+
+            Q: don't we have to do this in epilogue?
+                - No. epilogues is in function definition.
+            TODO: currently, function can have at most 6 argumnets. we should
+            levarage stack if we need more.
+
+            kind: ND_FUNC_CALL
+            block: now putting args in block member. node->args is for func def.
+
             */
 
-            // 引数をまず評価してはstackにpushしていく
+            if_sequence++;
+
+            // evaluate args and push them into stack
             for (int i = 0; node->block[i] != NULL; i++) {
                 gen(node->block[i]);
                 num_args++;
@@ -518,72 +553,92 @@ void gen(Node* node) {
                 error_at0(token->str, "invalid number of args. lteq 6.");
             }
 
-            // 引数を"後ろから"ABI指定のregisterに投入
-            // 現在stackの一番上には最後の引数を評価した値が入っている
+            // registere evaluated values in stack to registers.
+            // now last argument is put on the top of stack.
             for (int i = num_args - 1; i >= 0; i--) {
                 printf("  pop %s\n", argreg8[i]);
             }
 
-            // RSPを16の倍数にする調整
-            // printf("  mov rax, rsp\n");
-            // printf("  and rax, 15\n");  // 下位4bitがすべて0なら16の倍数
-            // printf("  cmp rsi, 0\n");
-            // printf("  je .L.callDirectly.%d\n", id);
-            // printf("  mov rax, 0\n");
-            // printf("  sub rsp, 8\n");
-            // printf("  call %s\n", node->funcname);
-            // printf("  add rsp, 8\n");
-            // printf("  jmp .L.called.%d\n", id);
-            // // 次のラインをreturn addrとしてstackに積みつつ関数のところにjump
-            // printf(".L.callDirectly.%d:\n", id);
-            // printf("  mov rax, 0\n");
-            // printf("  call %s\n", node->funcname);
-            // printf(".L.called.%d:\n", id);
-            // printf("  push rax\n");  // raxに返り値が格納されている(ABI)
-            // return;
-
+            // adjust rsp so that it can be multiple of 16.
             printf("  mov rax, rsp\n");
             printf("  and rax, 15\n");
             printf("  jnz .L.call.%03d\n", id);
-            printf("  mov rax, 0\n");  // ALを0クリアして可変長引数に対応する.
-                                       // TODO: なにそれ
+            // clear al(least 8 bits of rax) with 0 value. this is prep for rest
+            // parameters.
+            // TODO: support rest parameters
+            printf("  mov rax, 0\n");
             printf("  call %s\n", node->funcname);
             printf("  jmp .L.end.%03d\n", id);
             printf(".L.call.%03d:\n", id);
-            printf("  sub rsp, 8\n");  // TODO:
-            // rspの値が16の倍数でないとき、8をひけばいいだけ?
-            printf("  mov rax, 0\n");  // ALを0クリアして可変長引数に対応する.
-                                       // TODO: なにそれ
+            // TODO: is it ok just sub 8 when it's not multiple of 16?
+            printf("  sub rsp, 8\n");
+            // clear al(least 8 bits of rax) with 0 value. this is prep for rest
+            // parameters.
+            printf("  mov rax, 0\n");
             printf("  call %s\n", node->funcname);
             printf("  add rsp, 8\n");
             printf(".L.end.%03d:\n", id);
-            printf("  push rax\n");  // FIXME あってる？？
+
+            // push value in rax. this means we always get returning value from
+            // functions.
+            printf("  push rax\n");
             return;
         case ND_FUNC_DEF:
+            /*
+            int* hoge(char a, int b) {body}
+
+            kind: ND_FUNC_DEF
+            funcname: ident of funcname
+            args: arguments' definitions
+            lhs: body
+
+            TODO: Currently ND_FUNC_DEF doesn't have type information of
+            returning value since we don't have semantic analysis.
+
+            locals[cur_scope_depth]: local variable's definitions.
+
+
+            memory layout:
+            -------rbp
+            arg0
+            arg1
+            ...
+            arg6
+            local variable0
+            local variable1
+            local variable2
+            ......
+            local variableN
+
+
+            */
+
             // label
             printf(".global %s\n", node->funcname);
             printf("%s:\n", node->funcname);
 
             /*
-            // プロローグ
-            ret address  <- (1) call直後のRSP
-            caller's RBP <- (2) ましたの2命令が終わったあとのRSP, RBP
-            arg0
-            arg1
+            prologue
+            1. push ret address          <- this is done in `call` intro. `call`
+            = push ret address + jump to func label
+            2. push caller's RBP         <- to restore state when this func is
+            finished.
+            3. push args from registers  <- ABI requirement.
             ...
             */
             printf("  push rbp\n");
             printf("  mov rbp, rsp\n");
 
-            // 引数の数を覗いた変数の数だけrspを"さらに"ずらして、変数領域を確保する
-            // この関数のためだけのlocals領域を関数フレーム先頭に確保するイメージ
+            // push down stack to store space for local variables as many as
+            // local variables this func has(not including args) we use this
+            // space for temporal local variables for this func.
             if (locals[cur_scope_depth]) {
                 int offset = locals[cur_scope_depth]->offset;
                 printf("  sub rsp, %d\n", offset);
             }
 
-            // call-funcした際にABI指定のregisterに保存した引数を
-            // 上の処理でずらした隙間に入れていく.
+            // copy arguments from registers to space right below rbp.
+            // TODO: doesn't this conflict with local variables?
             for (int i = 0; node->args[i]; i++) {
                 if (node->args[i]->varsize == 1) {
                     printf("  mov [rbp-%d], %s\n", node->args[i]->offset,
@@ -597,30 +652,35 @@ void gen(Node* node) {
                 }
             }
 
-            // 内容
+            // body
             gen(node->lhs);
 
-            // エピローグ
+            // epilogue
             printf("  mov rsp, rbp\n");
             printf("  pop rbp\n");
             printf("  ret\n");
 
             return;
         case ND_ADDR:
-            /* [&の次に来る変数のアドレス]をpushする */
+            /*
+            push address of the variable
+            kind: ND_ADDR
+            lhs: ND_LVAR
+            */
             gen_val(node->lhs);
             return;
         case ND_DEREF:
             /*
-            [アドレスの値]をpushした上で、それから値をとってきてpushし直す
-            ND_LVARとほぼ同じ処理
+            push "value" of the variable(this must be ptr), and do deref ops.
+            almost same as what ND_LVAR does
             */
-            // 左辺値のアドレスをスタックの先頭にpushし、
+            // evaluate the variable(ptr) as right variable to get address of a
+            // variable pointed by the given variable(ptr)
             gen(node->lhs);
 
-            // そのアドレスをraxにいれ
+            // push the address to rax
             printf("  pop rax\n");
-            // そのアドレスにある値をraxにいれ、
+            // and get value of the pointed variable
             type = get_type(node);
             if (type && type->ty == CHAR) {
                 printf("  movsx rax, BYTE PTR [rax]\n");
@@ -629,7 +689,7 @@ void gen(Node* node) {
             } else {
                 printf("  mov rax, [rax]\n");
             }
-            // その値をスタックの先頭にpush
+            // then push the value on stack
             printf("  push rax\n");
             return;
     }
@@ -653,21 +713,24 @@ void gen(Node* node) {
         case ND_DIV:
             printf("  cqo\n");
             /*
-            idiv: 符号あり除算.
-            暗黙的にrdx,
-            raxをとってそれを合わせたものを128bit整数とみなしてそれを引数レジスタの64bitでわり、
-            商をraxに、あまりをrdxにセットする
-            cqo命令を使うとraxに入っている64bitの値を128bitに伸ばしてrdx,
-            raxにセットすることが出来る
+            idiv: division with signs
+            it implicitly gets rdx and rax, sum them, and devide the result by
+            passed register to idiv inst. it sets result in rax and remains in
+            rdx with cqo inst, it consider the result as 128bits and set it
+            across rdx, rax.
 
-            pop rdi   // stackから取り出して割る数としてset
-            pop rax   // stackから取り出して割られる数としてset
-            cqo       // rdx, rax <- 10 を代入する命令.
-            全体で10なので、rdxは0が入る idiv rdi  // rdx,rax(10) / rdi
-            を行い、商をrax, あまりをrdxにset push rax  // 答えをpush
+            pop rdi   // set value as devider
+            pop rax   // set value as devidee
+            cqo       // set 10 as 128bit across rdx, rax. rdx is zero cleared
+            here.
+                      // TODO: ???rax will be 10?
+            idiv rdi  // (rdx(=0) + rax) / rdi
 
-            TODO: sete, setne, setl, setle と alの使い方
+            TODO: learn sete, setne, setl, setle
             */
+
+            // TODO: don't we need to clear rdx with zero before calling idiv?
+            // devide rax by rdi
             printf("  idiv rdi\n");
             break;
         case ND_EQ:
@@ -705,12 +768,13 @@ void gen(Node* node) {
 }
 
 /*
-左辺値として扱う = そのnodeの「アドレス」をstackにpushする
+gen_val treat the given node(ND_LVAR) as lvalue.
+That means baricc pushes its "address" in stack here for assign operation.
 */
 void gen_val(Node* node) {
-    // ND_DEREFのときは右辺値扱いして「値」をstackにpushする
+    // when node is ND_DEREF, treat it as right-value(= push its "value" in
+    // stack)
     if (node->kind == ND_DEREF) {
-        // TODO: ->lhs を除外しても動いてしまう. なぜ
         gen(node->lhs);
         return;
     }
@@ -722,7 +786,7 @@ void gen_val(Node* node) {
     } else if (node->kind == ND_GVAR) {
         printf("  push offset %s\n", node->varname);
     } else if (node->kind == ND_MEMBER) {
-        // memberのoffsetをaddする
+        // add offset of the member
         gen_val(node->lhs);
         printf("  pop rax\n");
         printf("  add rax, %d\n", node->member->offset);

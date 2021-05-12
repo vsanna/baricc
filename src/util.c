@@ -1,4 +1,4 @@
-#include "9cc.h"
+#include "baricc.h"
 
 char *read_file(char *path) {
     FILE *fp = fopen(path, "r");
@@ -6,7 +6,7 @@ char *read_file(char *path) {
         error2("cannot open %s: %s", path, strerror(errno));
     }
 
-    // ファイルサイズを調べる
+    // check filesize
     if (fseek(fp, 0, SEEK_END) == -1) {
         error2("%s: fseek: %s", path, strerror(errno));
     }
@@ -15,11 +15,12 @@ char *read_file(char *path) {
         error2("%s: fseek: %s", path, strerror(errno));
     }
 
-    // ファイルを読み込む
+    // read file
     char *buf = calloc(1, size + 2);
     fread(buf, size, 1, fp);
 
-    // ファイルの末尾に改行なければ入れておく. EOF処理の簡易化
+    // if the file doesn't have line break at the end of it, assert one. this is
+    // for making EOF ops easier
     if (size == 0 || buf[size - 1] != '\n') {
         buf[size++] = '\n';
     }
@@ -30,6 +31,8 @@ char *read_file(char *path) {
 }
 
 // for debugging
+// TODO(critical): Now stderr is not available.. so when we do self-copmile, we
+// cannot use fprintf at all.
 void print_token(Token *tok) {
     if (tok == NULL) {
         fprintf(stderr, "[DEBUG] token is null\n");
@@ -103,6 +106,7 @@ void error1(char *fmt, char *val) {
     fprintf(stderr, "\n");
     exit(1);
 }
+
 void error2(char *fmt, char *val1, char *val2) {
     fprintf(stderr, fmt, val1, val2);
     fprintf(stderr, "\n");
@@ -110,48 +114,46 @@ void error2(char *fmt, char *val1, char *val2) {
 }
 
 void error_at0(char *loc, char *fmt) {
-    // locが含まれている行の開始地点と終了地点を取得
+    // get the line where loc exists.
+    // line is : head pos of the line
+    // end is  : tail pos of the line
     char *line = loc;
     while (user_input < line && line[-1] != '\n') line--;
 
     char *end = loc;
     while (*end != '\n') end++;
 
-    // 見つかった行が全体の何行目なのかを調べる
+    // find which line num the line is.
     int line_num = 1;
     char *p;
     for (p = user_input; p < line; p++)
         if (*p == '\n') line_num++;
 
-    // 見つかった行を、ファイル名と行番号と一緒に表示
+    // print the line with line number and filename
     int indent = fprintf(stderr, "%s:%d: ", filename, line_num);
     fprintf(stderr, "%.*s\n", (end - line), line);
 
-    // エラー箇所を"^"で指し示して、エラーメッセージを表示
+    // point where error is happening with "^"
     int pos = loc - line + indent;
-    fprintf(stderr, "%*s", pos, "");  // pos個の空白を出力
+    fprintf(stderr, "%*s", pos, "");
     fprintf(stderr, fmt);
     exit(1);
 }
 
 void error_at1(char *loc, char *fmt, char *val) {
-    // locが含まれている行の開始地点と終了地点を取得
     char *line = loc;
     while (user_input < line && line[-1] != '\n') line--;
 
     char *end = loc;
     while (*end != '\n') end++;
 
-    // 見つかった行が全体の何行目なのかを調べる
     int line_num = 1;
     for (char *p = user_input; p < line; p++)
         if (*p == '\n') line_num++;
 
-    // 見つかった行を、ファイル名と行番号と一緒に表示
     int indent = fprintf(stderr, "%s:%d: ", filename, line_num);
     fprintf(stderr, "%.*s\n", (end - line), line);
 
-    // エラー箇所を"^"で指し示して、エラーメッセージを表示
     int pos = loc - line + indent;
     fprintf(stderr, "%*s", pos, "");  // pos個の空白を出力
     fprintf(stderr, fmt, val);
@@ -159,25 +161,85 @@ void error_at1(char *loc, char *fmt, char *val) {
 }
 
 void error_at2(char *loc, char *fmt, char *val1, char *val2) {
-    // locが含まれている行の開始地点と終了地点を取得
     char *line = loc;
     while (user_input < line && line[-1] != '\n') line--;
 
     char *end = loc;
     while (*end != '\n') end++;
 
-    // 見つかった行が全体の何行目なのかを調べる
     int line_num = 1;
     for (char *p = user_input; p < line; p++)
         if (*p == '\n') line_num++;
 
-    // 見つかった行を、ファイル名と行番号と一緒に表示
     int indent = fprintf(stderr, "%s:%d: ", filename, line_num);
     fprintf(stderr, "%.*s\n", (end - line), line);
 
-    // エラー箇所を"^"で指し示して、エラーメッセージを表示
     int pos = loc - line + indent;
     fprintf(stderr, "%*s", pos, "");  // pos個の空白を出力
     fprintf(stderr, fmt, val1, val2);
     exit(1);
+}
+
+// TODO: find better way to get enum name.
+char *get_token_kind_name(TokenKind kind) {
+    switch (kind) {
+        case TK_RESERVED:
+            return "TK_RESERVED";
+        case TK_NUM:
+            return "TK_NUM";
+        case TK_EOF:
+            return "TK_EOF";
+        case TK_IDENT:
+            return "TK_IDENT";
+        case TK_RETURN:
+            return "TK_RETURN";
+        case TK_IF:
+            return "TK_IF";
+        case TK_ELSE:
+            return "TK_ELSE";
+        case TK_WHILE:
+            return "TK_WHILE";
+        case TK_FOR:
+            return "TK_FOR";
+        case TK_TYPE:
+            return "TK_TYPE";
+        case TK_SIZEOF:
+            return "TK_SIZEOF";
+        case TK_STRING:
+            return "TK_STRING";
+        case TK_STRUCT:
+            return "TK_STRUCT";
+        case TK_TYPEDEF:
+            return "TK_TYPEDEF";
+        case TK_ENUM:
+            return "TK_ENUM";
+        case TK_BREAK:
+            return "TK_BREAK";
+        case TK_CONTINUE:
+            return "TK_CONTINUE";
+        case TK_SWITCH:
+            return "TK_SWITCH";
+        case TK_CASE:
+            return "TK_CASE";
+        case TK_DEFAULT:
+            return "TK_DEFAULT";
+        case TK_TRUE:
+            return "TK_TRUE";
+        case TK_FALSE:
+            return "TK_FALSE";
+        case TK_NULL:
+            return "TK_NULL";
+        case TK_SEEKSET:
+            return "TK_SEEKSET";
+        case TK_SEEKCUR:
+            return "TK_SEEKCUR";
+        case TK_SEEKEND:
+            return "TK_SEEKEND";
+        case TK_ERRNO:
+            return "TK_ERRNO";
+        case TK_STDERR:
+            return "TK_STDERR";
+        default:
+            error0("tried to read unexpected token kind");
+    }
 }

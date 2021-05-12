@@ -1,4 +1,4 @@
-#include "9cc.h"
+#include "baricc.h"
 
 LVar* locals[100];
 LVar* globals[100];
@@ -7,6 +7,9 @@ StringToken* strings;
 Tag* tags;
 EnumVar* enum_vars;
 Node* current_switch = 0;
+// How many function/global variables/global typedef this compiler supports.
+// TODO replace Node*[] -> Node**
+Node* code[1000];
 
 /**************************
  * node builder
@@ -24,6 +27,12 @@ Node* new_binary(NodeKind kind, Node* lhs, Node* rhs) {
     return node;
 }
 
+Node* new_unary(NodeKind kind, Node* lhs) {
+    Node* node = new_node(kind);
+    node->lhs = lhs;
+    return node;
+}
+
 // a util function to build num node
 Node* new_num(int val) {
     Node* node = new_node(ND_NUM);
@@ -37,10 +46,6 @@ Node* new_string(StringToken* str) {
     node->string = str;
     return node;
 }
-
-// How many function/global variables/global typedef this compiler supports.
-// TODO replace Node*[] -> Node**
-Node* code[1000];
 
 /**************************
  * parse functions
@@ -89,13 +94,13 @@ void program() {
             }
         } else if (def->type->ty == STRUCT) {
             /*
-            valid:
+            # valid:
             struct Hoge {int a;} hoge;
             struct Hoge {int a;} hoge = {1};
             Hoge hoge;
             Hoge hoge[] = {};
 
-            invalid:
+            # invalid:
             struct {int a;} hoge;
             struct {int a;} hoge = {1};
             struct Hoge {int a;}[] a;  ... we cannot define array of struct in oneline.
@@ -144,7 +149,7 @@ bool define_typedef() {
     return true;
 }
 
-// enum Hoge { A = 100, B = 200}
+// define_enum ::= "enum" ident "{" (define_enum_member (","
 Type* define_enum() {
     if (!consume_kind(TK_ENUM)) {
         return NULL;
@@ -157,38 +162,18 @@ Type* define_enum() {
         if (tag->type->incomplete) {
             error0("type not found.");
         }
-        return tag->type;  // intが変えるはず
+        return tag->type;  // int should be returned
     }
 
     expect("{");
     int num = 0;
     while (true) {
-        // NOTE: 末尾に,がついていてもOK
-        if (consume("}")) {
-            break;
-        }
-        // AAA = 10,
-        // or
-        // AAA,
-        Token* n = consume_kind(TK_IDENT);
+        if (consume("}")) break;
 
-        if (consume("=")) {
-            num = expect_number();
-        } else {
-            num += 1;
-        }
+        define_enum_member(&num);
 
-        EnumVar* e = calloc(1, sizeof(EnumVar));
-        e->name = calloc(100, sizeof(char));
-        memcpy(e->name, n->str, n->len);
-        e->value = num;
-        e->next = enum_vars;
-        enum_vars = e;
-
-        // define_variable(def, globals);
-        if (consume("}")) {
-            break;
-        }
+        // it's legal to have trailing comma
+        if (consume("}")) break;
         expect(",");
     }
 
@@ -198,6 +183,32 @@ Type* define_enum() {
     }
 
     return int_type();
+}
+
+/*
+define_enum_member ::= ident ("=" number)
+    `AAA = 10`
+    or
+    `AAA`
+define_enum_member register each enum members as EnumVar
+auto assigned number value starts from 1;
+*/
+void define_enum_member(int* num) {
+    Token* tok = expect_kind(TK_IDENT);
+
+    if (consume("=")) {
+        *num = expect_number();
+    } else {
+        *num += 1;
+    }
+
+    EnumVar* e = calloc(1, sizeof(EnumVar));
+    e->name = calloc(100, sizeof(char));
+    memcpy(e->name, tok->str, tok->len);
+    e->value = *num;
+    e->next = enum_vars;
+    enum_vars = e;
+    return;
 }
 
 Type* int_type() {
@@ -219,11 +230,19 @@ Type* ptr_type() {
     return t;
 }
 
-// structを定義orlookupしてその型を返す
-// NOTE: struct自体は何かをアセンブラに吐き出すわけではない(compilerだけが持つ情報)なのでnode不要
-// define_struct = "struct" tag(ident)? "{" (define_variable ";")* "}"
-//                  ^start
-// STRUCTのtypeを返す
+/*
+define new struct tag or finde defined struct tag, and return the tag's type
+
+struct itself doesn't print to assembly;
+it's information only compiler has.
+
+when define_struct_body doesn't exist,
+it registers the struct tentatively or retrieves already registered tag
+
+define_struct ::= "struct" ident? define_struct_body
+                  | "struct" ident
+define_struct_body ::= "{" (define_variable ";")* "}"
+*/
 Type* define_struct() {
     if (!consume_kind(TK_STRUCT)) {
         return NULL;
@@ -231,11 +250,13 @@ Type* define_struct() {
 
     Token* name = consume_kind(TK_IDENT);
 
-    // nameがあってすでに定義済みのstructの場合は struct Hoge h; のように定義できるので、そのtypeを引っ張ってくる
-    // TODO: 定義済みならそのoverrideを許さず、{}が続いたらエラー
+    // if ident(name) is found and this struct doesn't have define_struct_body,
+    // retrieve a tag tied with the name
     if (name && !check("{")) {
         Tag* tag = find_or_register_tag(name);
-        // TODO: ここでdummyのときにINTが変えることがおかしい. むりやりSTRUCTにここで変えてしまう
+        // when the struct is still imcomplete, this tag is returned as INT,
+        // so override it as STRUCT forcibly.
+        // TODO: refactor
         tag->type->ty = STRUCT;
         return tag->type;
     }
@@ -248,27 +269,34 @@ Type* define_struct() {
     Member head;
     Member* cur = &head;
 
-    // TODO: tag名に対応
-    // Token* name = consume_kind(TK_IDENT);
-    // TODO なにここのwhile
     int offset = 0;
     int maxSize = 0;
     while (!consume("}")) {
-        // 型情報を取得し
-        Define* def = read_define_head();
-        read_define_suffix(def);
+        // retrieve type info of a member
+        Define* def = read_define();
         expect(";");
-        // membersにつめる
+        // build a members with the member's name and type
         //// name
         Member* m = calloc(1, sizeof(Member));
         m->name = calloc(100, sizeof(char));
         memcpy(m->name, def->ident->str, def->ident->len);
-
         //// type
         m->ty = def->type;
         int size = get_type_size(def->type);
 
         /*
+        calc offset for each member.
+        here it just defines offset for each members.
+        TODO:
+        with initializer: we need ND_PADDING
+        without initializer: we don't need ND_PADDING
+        ... why? see how assembly is generated with these 4 patterns
+        1. local * with initializer
+        2. global * with initializer
+        3. local * without initializer
+        4. global * without initializer
+
+
         struct {
             int a;
             char b;
@@ -301,20 +329,22 @@ Type* define_struct() {
     return struct_type;
 }
 
-// func_def = type-annotation ident "(" ("int" ident ("," "int" ident)*)? ")"
-//                                       ^start
-// block.
-// type-annotation ident までは読み込み済み
+/*
+func_def ::= read_define "(" (define_arg ("," define_ar)*)? ")" block
+NOTE: c cannot pass array as arg. so we cannot use read_define for arg.
+
+Node{
+    kind: ND_FUNC_DEF
+    funcname: function name
+    args: array of Node(ND_LVAR). NOTE: register args as local variables too!
+    lhs: function body as block
+}
+*/
 Node* func_def(Define* def) {
     // one LVar linked list per one function.
     cur_scope_depth++;
-    Node* node;
 
-    // ND_FUNC_DEF node:
-    // node->funcname: string. func name.
-    // node->args: array of ND_LVAR node.
-    // node->lhs: function body.
-    node = new_node(ND_FUNC_DEF);
+    Node* node = new_node(ND_FUNC_DEF);
 
     // function name
     node->funcname = calloc(100, sizeof(char));
@@ -323,24 +353,13 @@ Node* func_def(Define* def) {
 
     // function args
     for (int i = 0; !consume(")"); i++) {
-        if (i != 0) {
-            expect(",");
-        }
-
-        Define* arg_def = read_define_head();
-        if (arg_def == NULL) {
-            char* name[100] = {0};
-            memcpy(name, token->str, token->len);
-            error1("invalid token comes here. %d", name);
-        }
-
-        Node* variable_node = define_variable(arg_def, locals);
-        node->args[i] = variable_node;
+        if (i != 0) expect(",");
+        node->args[i] = define_arg();
     }
 
-    // NOTE: int hoge(); is prototype decl. just skip this kind of statement.
+    // NOTE: int hoge(); is prototype decl.
+    // just skip this kind of statement since baricc doesn't support prototype decl(it just ignores)
     if (consume(";")) {
-        int debug;
         locals[cur_scope_depth] = NULL;
         cur_scope_depth--;
         return NULL;
@@ -352,6 +371,20 @@ Node* func_def(Define* def) {
     return node;
 }
 
+// define_arg ::= type "*"* ident
+Node* define_arg() {
+    Define* arg_def = read_define_head();
+    if (arg_def == NULL) {
+        char* name[100] = {0};
+        memcpy(name, token->str, token->len);
+        error1("invalid token comes here. %d", name);
+    }
+
+    // extract arg as ND_LVAR and register it as local variable
+    return define_variable(arg_def, locals);
+}
+
+// TODO: this eBNF is nore up-to-date.
 // stmt = expr ";"
 //        | "return" expr ";"
 //        | "if" "(" expr ")" stmt ("else" stmt)?
@@ -363,14 +396,13 @@ Node* func_def(Define* def) {
 //        | "continue" ";"
 //        | ("--" | "++") ident
 //        | ident ("--" | "++")
-//        consume_kindココでしてるからそれもdefineにもってく
 Node* stmt() {
     Node* node;
 
     if (consume_kind(TK_RETURN)) {
         node = new_node(ND_RETURN);
         if (!consume(";")) {
-            node->lhs = expr();  // lhsだけ持つとする
+            node->lhs = expr();
             expect(";");
         }
         return node;
@@ -378,18 +410,21 @@ Node* stmt() {
 
     if (consume_kind(TK_IF)) {
         /*
-        # elseなし
-        if -lhs- cond
-           -rhs- main
+        # without else
+        ND_IF:
+            lhs: cond
+            rhs: main
 
-        # elseあり
-        if -lhs- cond
-           -rhs- else -lhs- main
-                      -rhs- alt(stmt)
+        # with else
+        ND_IF:
+            lhs: cond
+            rhs: else
+                lhs: main
+                rhs: alt(stmt)
         */
         node = new_node(ND_IF);
         expect("(");
-        node->lhs = expr();  // lhsをcondとする
+        node->lhs = expr();
         expect(")");
         node->rhs = stmt();
         if (consume_kind(TK_ELSE)) {
@@ -425,7 +460,7 @@ Node* stmt() {
         node->lhs = expr();  // switch's flag expr
         expect(")");
 
-        // TODO: why escaping here
+        // To allow nested switch, escape current_switch
         Node* sw = current_switch;
         current_switch = node;
 
@@ -463,7 +498,7 @@ Node* stmt() {
 
         Node* node = new_node(ND_CASE);
         node->val = val;
-        // NOTE: To check labels from the top one.
+        // To check labels from the top one.
         node->next_case = current_switch->next_case;
         current_switch->next_case = node;
         return node;
@@ -471,7 +506,7 @@ Node* stmt() {
 
     if (consume_kind(TK_DEFAULT)) {
         /*
-            consider `default:` this line as one stmt which outputs label only.
+        consider `default:` as one stmt which outputs label only.
         */
         if (!current_switch) {
             error0("stray case");
@@ -483,8 +518,15 @@ Node* stmt() {
     }
 
     if (consume_kind(TK_FOR)) {
-        // leftは初期化と終了条件を、
-        // rightは後処理とstmtを保持
+        /*
+        ND_FOR:
+            lhs:
+                lhs: stmt(initializer)
+                rhs: cond to loop again
+            rhs:
+                lhs: post ops
+                rhs: body to loop
+        */
         Node* node = new_node(ND_FOR);
         Node* left = new_node(ND_FOR_LEFT);
         Node* right = new_node(ND_FOR_RIGHT);
@@ -504,7 +546,7 @@ Node* stmt() {
         }
 
         if (!consume(")")) {
-            right->lhs = expr();
+            right->lhs = expr();  // TODO: this should be stmt?
             expect(")");
         }
 
@@ -524,12 +566,11 @@ Node* stmt() {
         return node;
     }
 
-    // TODO: 上とstyle合わせたい
-    Node* block_node = block();
-    if (block_node != NULL) {
-        return block_node;
+    if (check("{")) {
+        return block();
     }
 
+    // decl new variable with/without initializer.
     Define* def = read_define_head();
     if (def != NULL) {
         Node* node = define_variable(def, locals);
@@ -562,11 +603,11 @@ Node* block() {
     return node;
 }
 
+// TODO: refactor. move assign in stmt and expr should work current "conditional" function.
 // expr ::= assign
 Node* expr() { return assign(); }
 
-// ココよりも下は代入の=の左辺 or 右辺. つまり一般的な式に相当するもの.
-// TODO: exprをココで使いたい...が、cでは代入が式である
+// what are described below from here are corresponding to expr in general.
 // assign ::= equality ("=" equality)?
 Node* assign() {
     Node* node = conditional();
@@ -631,15 +672,31 @@ Node* conditional() {
     return node;
 }
 
+/*
+ex: A || B || C => (A || B) || C
+ND_LOGOR:
+    lhs: ND_LOGOR
+        lhs: A
+        rhs: B
+    rhs: C
+TODO: Now it doesn't work like this. add test and fix.
+*/
 Node* logor() {
     Node* node = logand();
     while (consume("||")) {
-        // TODO: logorでなくていいのか
         node = new_binary(ND_LOGOR, node, logor());
     }
     return node;
 }
-
+/*
+ex: A && B && C => (A && B) && C
+ND_LOGAND:
+    lhs: ND_LOGAND
+        lhs: A
+        rhs: B
+    rhs: C
+TODO: Now it doesn't work like this. add test and fix.
+*/
 Node* logand() {
     Node* node = bitor ();
     while (consume("&&")) {
@@ -648,16 +705,32 @@ Node* logand() {
     return node;
 }
 
-// TODO: よく理解する
+/*
+ex: A | B | C => (A | B) | C
+ND_BITOR:
+    lhs: ND_BITOR
+        lhs: A
+        rhs: B
+    rhs: C
+TODO: Now it doesn't work like this. add test and fix.
+*/
 Node* bitor () {
-    Node* node = bitxor();
+    Node* node = bitxor();  // xor has higher priority than bitor
     while (consume("|")) {
-        // TODO: bitorでなくてよいのか?
-        node = new_binary(ND_BITOR, node, bitxor());
+        node = new_binary(ND_BITOR, node, bitor ());
     }
     return node;
 }
 
+/*
+ex: A ^ B ^ C => (A ^ B) ^ C
+ND_BITXOR:
+    lhs: ND_BITXOR
+        lhs: A
+        rhs: B
+    rhs: C
+TODO: Now it doesn't work like this. add test and fix.
+*/
 Node* bitxor() {
     Node* node = bitand();
     while (consume("^")) {
@@ -666,16 +739,24 @@ Node* bitxor() {
     return node;
 }
 
+/*
+ex: A & B & C => (A & B) & C
+ND_BITAND:
+    lhs: ND_BITAND
+        lhs: A
+        rhs: B
+    rhs: C
+TODO: Now it doesn't work like this. add test and fix.
+*/
 Node*bitand() {
     Node* node = equality();
     while (consume("&")) {
-        // TODO bitandでなくてよいのか?
-        node = new_binary(ND_BITAND, node, equality());
+        node = new_binary(ND_BITAND, node, bitand());
     }
     return node;
 }
 
-// equality = relational ("==" relational | "!=" relational)*
+// equality ::= relational ("==" relational | "!=" relational)*
 Node* equality() {
     Node* node = relational();
 
@@ -690,14 +771,11 @@ Node* equality() {
     }
 }
 
-// relational = add ("<" add | ">" add | "<=" add | ">=" add)*
+// relational = add ("<" add | ">" add | "<=" add | ">=" add)?
 Node* relational() {
     Node* node = add();
 
     for (;;) {
-        // TODO: こっち先でよいの?
-        // -> OK.
-        // なぜならconsumeが見ているのは次のtokenなのですでに<か<=かは考慮済みなので
         if (consume("<")) {
             node = new_binary(ND_LT, node, add());
         } else if (consume("<=")) {
@@ -712,7 +790,7 @@ Node* relational() {
     }
 }
 
-// add = mul("*" mul | "/" mul)*
+// add = mul("+" mul | "-" mul)*
 Node* add() {
     Node* node = mul();
 
@@ -725,14 +803,6 @@ Node* add() {
             return node;
         }
     }
-}
-
-Node* ptr_conversion(Node* node, Node* right) {
-    if (node->type && node->type->ptr_to) {
-        int size_of_type = get_type_size(node->type->ptr_to);
-        return new_binary(ND_MUL, right, new_num(size_of_type));
-    }
-    return right;
 }
 
 // mul = unary("*" unary| "/" unary)*
@@ -751,11 +821,11 @@ Node* mul() {
 
 // unary = ("sizeof" | "+" | "-" | "*" | "&" | "++" | "--")? unary | primary
 Node* unary() {
-    // 前置++. ++a
+    // ++a
     if (consume("++")) {
         return new_binary(ND_PRE_INC, unary(), NULL);
     }
-    // 後置--. --a
+    // --a
     if (consume("--")) {
         return new_binary(ND_PRE_DEC, unary(), NULL);
     }
@@ -763,16 +833,19 @@ Node* unary() {
     if (consume("+")) {
         return unary();
     }
+
     if (consume("-")) {
         return new_binary(ND_SUB, new_num(0), unary());
     }
+
     if (consume("*")) {
-        // TODO: unaryの部分はpointer型でなかったらエラーにするべき
         return new_binary(ND_DEREF, unary(), NULL);
     }
+
     if (consume("&")) {
         return new_binary(ND_ADDR, unary(), NULL);
     }
+
     if (consume("!")) {
         return new_binary(ND_NOT, unary(), NULL);
     }
@@ -781,10 +854,7 @@ Node* unary() {
         return new_binary(ND_BITNOT, unary(), NULL);
     }
 
-    // sizeof x: xのサイズを返す.
     if (consume_kind(TK_SIZEOF)) {
-        // "sizeof" unaryにおけるunaryの末尾までtokenをすすめる
-
         // when pure type is passed
         if ((check("(") && token->next->kind == TK_TYPE) ||
             check_kind(TK_TYPE)) {
@@ -879,9 +949,8 @@ Node* unary() {
 //           | ident ("(" (expr ",")* ")")?
 //           | "(" expr ")"
 //           | '""string'"'
-// TODO: primaryにexpr入れたくない
 Node* primary() {
-    // 次のトークンが ( なら ( expr ) のハズ
+    // recursive expr
     if (consume("(")) {
         Node* node = expr();
         expect(")");
@@ -919,6 +988,7 @@ Node* primary() {
         return variable(tok);
     }
 
+    // predefined keywords
     Node* num_node = convert_predefined_keyword_to_num();
     if (num_node) {
         return num_node;
@@ -941,7 +1011,7 @@ Node* primary() {
         return node;
     }
 
-    // そうでなければnumのハズ
+    // otherwise number
     return new_num(expect_number());
 }
 
@@ -958,11 +1028,10 @@ Node* variable(Token* tok) {
         error1("variable %s is not defined yet", name);
     }
 
-    // すでに宣言済みの変数であればそのoffsetを使う
+    // if the lvar is already defined, use the offset
     node->offset = lvar->offset;
     node->type = lvar->type;
 
-    // TODO: kindの付け替えはしたくない
     node->kind = (lvar->kind == LOCAL) ? ND_LVAR : ND_GVAR;
     node->varname = calloc(100, sizeof(char));
     memcpy(node->varname, tok->str, tok->len);
@@ -974,28 +1043,28 @@ Node* variable(Token* tok) {
         bool has_index = false;
         while (consume("[")) {
             has_index = true;
-            // a[3] は *(a + 3) にする
-            // DEREF -- ADD -- a
-            //              -- MUL -- 3(expr)
-            //                     -- sizeof(a)
+            // a[3] => *(a + 3)
+            // DEREF:
+            //   ADD:
+            //     a
+            //     MUL:
+            //       3(expr)
+            //       sizeof(a)
             //
             // a[2][3] -> *( *(a + 2) + 2 )
-            // 大きな1歩の中に小さな2歩
-            // (a + 1)はあどれすで、[a + 1]が示す値もアドレス
-            // int a[n][m]; にたいして、 a[1][2]を取得するには
-            // DEREF( (a + sizeof(int * m: 1行のsize) * 1) + sizeof(int:
-            // 1cellのサイズ) * 2 ) 最後にだけderefする
+            // value of (a + 1) is address, and [a + 1] is still address
+            // To get a[1][2] from `int a[n][m];`,
+            // we use DEREF( (a + sizeof(int * m) * 1) + sizeof(int) * 2 )
+            // we just do deref at last only
             Node* add = new_node(ND_ADD);
-            add->lhs = node;  // 変数
+            add->lhs = node;  // variable
 
             Node* index_val = expr();
 
-            // NOTE:
-            // ここのtype_sizeでみるのは要素のサイズなので常にptr_to一個先をみる
+            // we check size of element, so ew already see tp->ptr_to
             add->rhs = new_binary(ND_MUL, index_val,
                                   new_num(get_type_size(tp->ptr_to)));
             tp = tp->ptr_to;
-            // TODO: node(ND_LVAR)のtypeが配列のままなのにptrになっちゃってない?
             node = add;
             node->type = tp;
             node->varname = varname;
@@ -1009,7 +1078,7 @@ Node* variable(Token* tok) {
             continue;
         }
 
-        // memberアクセス
+        // access to member
         if (consume(".")) {
             node = struct_ref(node);
             tp = node->type;
@@ -1017,15 +1086,14 @@ Node* variable(Token* tok) {
             continue;
         }
 
-        // memberアクセス
+        // access to member (base is ptr)
+        // ptr->field => (*ptr).field
         if (consume("->")) {
-            // 今nodeはPTR of STRUCT のLVAR. その指すtype = STRUCTをとっておく
             Type* t = node->type->ptr_to;
             Node* deref = new_node(ND_DEREF);
-            // ここのnodeはLVAR. ただしptrのハズ. それをderefにわたすことで
-            deref->lhs = node;
-            // deref node に structをセット. この時点でderefはa.bと同じ構造に変換されてる
+            deref->lhs = node;  // this node is ptr lvar
             deref->type = t;
+            // now deref is done. we do the same thing in a block above.
             node = struct_ref(deref);
             tp = node->type;
             node->varname = varname;
@@ -1051,17 +1119,12 @@ Node* variable(Token* tok) {
     return node;
 }
 
-// stmtの一つ. 変数を宣言する.
-// ND_LVARを返しつつ、LVarを作ってlocalsに追加する
-// TODO: これは意味解析も一緒にやっちゃってないか? それはいいの?
-// TODO: scopeが異なる変数が見つかった場合はエラーではないが,
-// 同一scopeで見つかったらエラーみたいなことをするにはまたロジックを考える必要がある
-// TODO: block切って同名/別型変数を宣言したときに既存言語でエラーになるかどうか
-// NOTE: 型宣言の最初にいる状態で呼ばれる. *とidentの処理を行う
-// define_variable = "int" "*"* ident ("=" 初期化式)
-//                                    ^start/end
-//                 | "int" "*"* ident "[" number "]" ("=" 初期化式)
-//                                    ^start        ^end
+/*
+define_variable read variable decl and register it as NDLVAR to varlist(globals or locals)
+TODO: support scope
+
+define_variable ::= read_define ("=" initializer)
+*/
 Node* define_variable(Define* def, LVar** varlist) {
     if (def == NULL) {
         print_token(token);
@@ -1112,7 +1175,7 @@ Node* define_variable(Define* def, LVar** varlist) {
     }
     varlist[scope_depth] = var;
 
-    // nodeを完成させる
+    // complete node
     node->offset = varlist[scope_depth]->offset;
     node->type = type;
     node->kind = (var->kind == LOCAL) ? ND_LVAR : ND_GVAR;
@@ -1121,7 +1184,7 @@ Node* define_variable(Define* def, LVar** varlist) {
 }
 
 // initializer ::= num | string | char | { (expr ("," expr)*)? }
-// TODO: add descriptin about how this works
+// TODO: add descriptin about how this and initializer_helper work
 Node* initializer(Type* type) {
     Node* init = calloc(1, sizeof(Node));
     init->block = calloc(100, sizeof(Node));
@@ -1145,7 +1208,6 @@ Node* initializer(Type* type) {
     return init;
 }
 
-// initにつめるだけ
 void initializer_helper(Type* type, Node* init, int* i) {
     // TODO: refactor: it must be able to cunsume "{" here.
     if (consume("{")) {
@@ -1161,7 +1223,8 @@ void initializer_helper(Type* type, Node* init, int* i) {
                 consume(",");
             }
 
-            // when size of initializer is larger than array_size, override the array_size
+            // when size of initializer is larger than array_size, override the
+            // array_size
             if (type->array_size < *i) {
                 type->array_size = *i;
             }
@@ -1183,8 +1246,6 @@ void initializer_helper(Type* type, Node* init, int* i) {
                 } else {
                     // padding between members
                     int aligned_total = align_to(total, get_type_size(m->ty));
-                    // fprintf(stderr, "[DEBUG] total = %d, aligned_total = %d\n",
-                    //         total, aligned_total);
                     if (aligned_total != total) {
                         init->block[*i] = new_node(ND_PADDING);
                         init->block[*i]->size = (aligned_total - total);
@@ -1216,10 +1277,14 @@ void initializer_helper(Type* type, Node* init, int* i) {
     }
 }
 
-// memberアクセス
+/**************************
+ * utils
+ * *************************/
+
+// access to member
 Node* struct_ref(Node* node) {
     Node* member = new_node(ND_MEMBER);
-    member->lhs = node;  // ベースオブジェクト
+    member->lhs = node;  // base object
 
     // get a member to access
     member->member = find_member(consume_kind(TK_IDENT), node->type);
@@ -1227,7 +1292,7 @@ Node* struct_ref(Node* node) {
     return member;
 }
 
-// type(struct想定)がもつmemberの中で、tokを名前に持つものを返す
+// Among members a type(struct) has, find one which has a name corresponding to the given tok
 Member* find_member(Token* tok, Type* type) {
     if (tok == NULL) {
         error0("member ident must come here");
@@ -1252,14 +1317,13 @@ Member* find_member(Token* tok, Type* type) {
     error0("member ident is not found");
 }
 
-// まずlocal変数を探してなければglobal変数を探す
+// find and return LVar from locals and globals
 LVar* find_variable(Token* tok) {
     // char* tmp[100] = {0};
     // memcpy(tmp, tok->str, tok->len);
     // fprintf(stderr, "[DEBUG] looking up variable: %s\n", tmp);
 
     for (LVar* var = locals[cur_scope_depth]; var; var = var->next) {
-        // NOTE: memcmpは一致していたら0を返す
         // char* tmp2[100] = {0};
         // memcpy(tmp2, var->name, var->len);
         // fprintf(stderr, "[DEBUG] comparing local token: %s and var: %s\n", tmp,
@@ -1271,9 +1335,7 @@ LVar* find_variable(Token* tok) {
         }
     }
 
-    // TODO: globalsを配列でなくしてこの添字を消す
     for (LVar* var = globals[0]; var; var = var->next) {
-        // NOTE: memcmpは一致していたら0を返す
         // char* tmp2[100] = {0};
         // memcpy(tmp2, var->name, var->len);
         // fprintf(stderr, "[DEBUG] comparing global token: %s and var: %s\n", tmp,
@@ -1295,7 +1357,7 @@ Node* local_variable_init(Node* node) {
         return node;
     }
 
-    // let's say now we wanna define and initializer an array.
+    // let's say now we wanna define and initialize an array.
     // this copmiler evaluates `int a[2] = {1, 2};`
     // as:
     // int a[2];
@@ -1303,13 +1365,12 @@ Node* local_variable_init(Node* node) {
     // a[1] = 2;
     // these three lines.
     //
-    // when num of itens in initializers are not enough to array_size, fill with zero.
+    // when num of itens in initializers are not enough to array_size, fill with
+    // zero.
 
     // TODO: refactor: unify the almost same operations below.
     // when initializing string
     if (node->var->init->kind == ND_STRING) {
-        // 文字列の場合は各charをそれぞれ代入する形にする
-        // NOTE: この時点ではnode->varは用意済み. ident/type入ってる. typeがarrayの場合もsize入れ込み済み
         Node* block = new_node(ND_BLOCK);
         block->block = calloc(node->var->type->array_size, sizeof(Node));
 
@@ -1399,12 +1460,7 @@ Node* local_variable_init(Node* node) {
     return assign;
 }
 
-/**************************
- * utils
- * *************************/
-
-// TODO: *(a + 1) * b の場合、bはint, aはptrだと、なんの型がかえる?
-// 型を探す.
+// DEREF node like `*(a + 1) * b`(a is ptr and b is int) should return ptr_to's type(in this case, INT)
 Type* get_type(Node* node) {
     if (node == NULL) {
         return NULL;
@@ -1414,14 +1470,13 @@ Type* get_type(Node* node) {
         return node->type;
     }
 
-    // 先に左見て、なければ右みる
+    // check left first
     Type* t = get_type(node->lhs);
     if (!t) {
         t = get_type(node->rhs);
     }
 
-    // DEREFの場合はとってきたtypeの指す先を返す(型のderef)
-    // TODO: ココよく理解する
+    // when node is DEREF, it returns ptr_to's type
     if (t && node->kind == ND_DEREF) {
         // TODO: ND_DEREF should have ptr_to? fix.
         if (t->ptr_to != NULL) {
@@ -1439,10 +1494,11 @@ Type* get_type(Node* node) {
     return t;
 }
 
-// 渡ってきたtypeのサイズを返す.
+// get_type_size returns suze if the type = (how much memory it needs to allocate itself)
 // INT -> 4
 // PTR -> 8
 // CHAR -> 1
+// TODO: change Type so that all Type object has its own size info in it.
 int get_type_size(Type* type) {
     if (type == NULL) {
         error0("type should be non null");
@@ -1462,24 +1518,25 @@ int get_type_size(Type* type) {
             }
             return get_type_size(type->ptr_to) * type->array_size;
         case STRUCT:
-            // size = 0;
-            // for (Member* m = type->members; m; m = m->next) {
-            //     size += get_type_size(m->ty);
-            // }
-            // return size;
+            // struct stores size info in itself
             return type->size;
         default:
             error0("unexpected Type->ty comes here");
     }
 }
 
-// TODO: type_prefixにrenameしてtype_suffixと連動させる
-// 関数またはグローバル変数の定義の前半のみをreadする
-// その読んだ情報をDefineをcontainerとして流用してそこに詰めて返す
-// int** hoge までを読む.
-// type_annotation = ("int"|"char") "*"*
-// assume:  current token = int
-// move to: current token = ident
+// read_type_and_ident ::= type_info_prefix ident type_info_suffix
+Define* read_define() {
+    Define* def = read_define_head();
+    read_define_suffix(def);
+    return def;
+}
+
+/*
+read_define_head ::= type "*"* ident
+type ::= "int" | "char" | "void" | "bool"
+read incopmlete type info and ident, and put them into Define as container, then return it
+*/
 Define* read_define_head() {
     Type* type = NULL;
 
@@ -1555,7 +1612,9 @@ Define* read_define_head() {
     return def;
 }
 
-// Defineのtypeに配列情報を付け加える. つまり型定義のsuffix部分をみる
+/*
+read suffix of variable decl and updated given def with the info
+*/
 void read_define_suffix(Define* def) {
     if (def == NULL) {
         print_token(token);
@@ -1602,7 +1661,8 @@ void push_tag(Token* tok, Type* type, bool is_complete) {
     tag->name = name;
     tag->type->array_size = type->array_size;
     tag->type->members = type->members;
-    // NOTE: typedef struct Hoge Hoge; doesn't make the struct definition complete.
+    // NOTE: typedef struct Hoge Hoge; doesn't make the struct definition
+    // complete.
     if (tag->type->incomplete && is_complete) {
         tag->type->incomplete = false;
     }
@@ -1638,7 +1698,8 @@ Tag* find_or_register_tag(Token* tok) {
             return tag;
         }
     }
-    // fprintf(stderr, "[DEBUG] tag: %s is not found. register it tentatively\n",
+    // fprintf(stderr, "[DEBUG] tag: %s is not found. register it
+    // tentatively\n",
     //         n);
 
     // when tag is not found, incomplete tag is returned as a dummy
@@ -1654,9 +1715,9 @@ Tag* find_or_register_tag(Token* tok) {
     return tag;
 }
 
-// find_enum_var returns enum as int if a enum whose name is corresponding to the given token.
-// if it cannot find the enum name, it returns NULL.
-// enum name here means `AAA` of `enum Enum {AAA, BBB}`
+// find_enum_var returns enum as int if a enum whose name is corresponding to
+// the given token. if it cannot find the enum name, it returns NULL. enum name
+// here means `AAA` of `enum Enum {AAA, BBB}`
 Node* find_enum_var(Token* tok) {
     char* name = calloc(100, sizeof(char));
     memcpy(name, tok->str, tok->len);
@@ -1699,4 +1760,12 @@ Node* convert_predefined_keyword_to_num() {
     }
 
     return NULL;
+}
+
+Node* ptr_conversion(Node* node, Node* right) {
+    if (node->type && node->type->ptr_to) {
+        int size_of_type = get_type_size(node->type->ptr_to);
+        return new_binary(ND_MUL, right, new_num(size_of_type));
+    }
+    return right;
 }

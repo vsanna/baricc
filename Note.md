@@ -22,10 +22,10 @@ objdump -d -M hello
 ## debug tips
 ### how to debug for self-hosting
 - make a copy of target file to test
-- $ gdb 9cc
-    - use executable file(9cc here) to debug its behavior.
-- > run "9cc.h" "copy_of_target.c"
-    - ≒ ./9cc "9cc.h" "copy_of_target.c"
+- $ gdb baricc
+    - use executable file(baricc here) to debug its behavior.
+- > run "baricc.h" "copy_of_target.c"
+    - ≒ ./baricc "baricc.h" "copy_of_target.c"
 - To detect where the error happens, comment out most of content in copy_of_target.c at first. and try to comment in step by step.
 
 ### quick tutorial for gdb
@@ -37,12 +37,12 @@ $ make test
 
 
 # start gdb
-$ gdb 9cc
+$ gdb baricc
 # set breakpoint
 > b codegen.c:61
 # set breakpoint on executable
 > b ${addres} ... ex: b 31663 => this will stop at `31663     push rax`
-# run 9cc with args
+# run baricc with args
 > run "test/test.c"
 
 # other useful commands in gdb

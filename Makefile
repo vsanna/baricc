@@ -1,20 +1,23 @@
 CFLAGS=-std=c11 -g -static
-SRCS=$(wildcard *.c)
+SRCS=$(wildcard src/*.c)
 OBJS=$(SRCS:.c=.o)
 
-9cc: $(OBJS)
-	$(CC) -o 9cc $(OBJS) $(LDFLAGS)
+baricc: $(OBJS)
+	$(CC) -o baricc $(OBJS) $(LDFLAGS)
 
-$(OBJS): 9cc.h
+$(OBJS): src/baricc.h
 
-test: 9cc
-	./test.sh
+test: baricc
+	./scripts/test.sh
 
-self: 9cc
-	./self.sh
+self: baricc
+	./scripts/self.sh
+
+self_test: baricc
+	./scripts/self_test.sh
 
 clean:
-	rm -f 9cc *.o *~ tmp*
+	rm -f baricc *.o *~ tmp*
 
 .PHONY: test clean self
 

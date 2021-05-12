@@ -1,8 +1,12 @@
 main
 tmp/
 tmp*
-9cc
+baricc
+baricc_self
 .devcontainer/
 
 *.o
 core
+.vscode/
+
+heartwarming_debug_history.asm

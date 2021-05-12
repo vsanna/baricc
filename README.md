@@ -1,7 +1,6 @@
-
 This c_compiler is based on:
 - [低レイヤを知りたい人のためのCコンパイラ作成入門](https://www.sigbus.info/compilerbook)
-- [Cコンパイラ作ってみる](https://www.youtube.com/playlist?list=PLp_EUEO9JJP08ApAdaTYKHsonrLyKzdvp)
+- [[YouTube] Cコンパイラ作ってみる](https://www.youtube.com/playlist?list=PLp_EUEO9JJP08ApAdaTYKHsonrLyKzdvp)
 
 
 ... and get help from these books as reference.
@@ -13,17 +12,25 @@ This c_compiler is based on:
 ```text
 .
 ├── src
-│   ├── main.c      #
-│   ├── 9cc.h       #
-│   ├── tokenize.c  # = parse.c in the book
-│   ├── parse.c     # = part of codegen.c in the book
-│   └── codegen.c   # = part of codegen.c in the book.
-│                       extracting stuff related with gen function.
+│   ├── baricc.h      # all func decl are placed here
+│   ├── util.c        # where to put common functions
+│   ├── main.c        # entry point
+│   ├── tokenize.c    #
+│   ├── parse.c       #
+│   └── codegen.c     #
+│
+├── test
+│   └── test.c        # place all test cases here
+│ 
+├── scripts
+│   ├── test.sh       # build binary by using cc and run test
+│   ├── self.sh       # build binary by itself
+│   └── self_test.sh  # run test by using self compiled binary
+│
 ├── Dockerfile
 ├── docker-compose.yml
 ├── Makefile
-├── test.sh
-└── func                # for exploring C. not used by src.
+└── sandbox           # for exploring C. not used by src. (but used by test)
 ```
 
 ## Start development environment
@@ -38,18 +45,19 @@ $ make test
 ```
 
 ## Self Compile
-- [x] 9cc.h
+- [x] baricc.h
 - [x] tokenize.c
 - [x] parse.c
 - [x] codegen.c
 - [x] util.c
+- [x] main.c
 
 ```bash
 make self > tmp.s
 # use cc as linker.
-cc -static -o 9cc_self tmp.s
+cc -static -o baricc_self tmp.s
 
-./9cc_self 9cc.h tokenize.c parse.c codegen.c util.c
+./baricc_self baricc.h tokenize.c parse.c codegen.c util.c
 ```
 
 ## supported feature
@@ -61,7 +69,7 @@ cc -static -o 9cc_self tmp.s
 - bit: ~, |, &, ^
 - for, while, if
 - int, char
-- void(implemented roughly)
+- void(implemented just as an alias to int..)
 - pointer: ref, deref
 - array
 - sizeof
@@ -79,7 +87,8 @@ cc -static -o 9cc_self tmp.s
 
 ## not supported features
 - [ ] static
-- [ ] ++, -- のptr対応
+- [ ] support ++, -- operation for pointer
 - [ ] rest parameters
 - [ ] macro
+- [ ] stdout, stderr, FILE
 
